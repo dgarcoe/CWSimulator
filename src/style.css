@@ -181,3 +181,18 @@ footer{margin-top:20px;padding:13px 0}
 .qso-log{max-height:260px;overflow:auto;background:var(--inset);border:1px solid var(--line);padding:10px;margin:12px 0;display:grid;gap:8px}
 .qso-log>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:10px;font:11px Consolas,monospace;line-height:1.5}
 .qso-log b{color:var(--accent)}.qso-log span{overflow-wrap:anywhere;color:var(--ink)}
+
+.academy-guide{margin-top:4px}
+.guide-tabs{display:flex;flex-wrap:wrap;gap:5px;margin:16px 0}
+.guide-tabs button{padding:9px 12px;font-size:11px;border:1px solid var(--line);background:var(--inset);color:var(--ink)}
+.guide-tabs button.active{border-color:var(--accent);color:var(--accent);font-weight:700}
+.guide-entries{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.guide-entries article{display:flex;align-items:start;justify-content:space-between;gap:12px;padding:13px;border:1px solid var(--line);background:var(--inset)}
+.guide-entries article strong{font-size:12px}
+.guide-entries article p{font-size:11px;line-height:1.55;color:var(--muted);margin:8px 0}
+.guide-entries article code{font-size:11px;color:var(--chart);overflow-wrap:anywhere}
+.guide-entries article button{flex-shrink:0;font-size:10px;padding:7px 9px}
+.guide-practice{display:flex;flex-wrap:wrap;align-items:end;gap:9px;margin:17px 0}
+.guide-practice label{flex:1 1 240px;font-size:11px}
+.guide-practice button{font-size:11px}
+@media(max-width:680px){.guide-entries{grid-template-columns:1fr}.guide-entries article{flex-wrap:wrap}}
