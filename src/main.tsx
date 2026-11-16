@@ -106,7 +106,7 @@ function App(){
  const machineAvg=machineTimes.length?Math.round(machineTimes.reduce((a,b)=>a+b,0)/machineTimes.length):0;
  const machineByChar=KOCH.slice(0,lesson).split('').map(ch=>{const entries=machineLog.filter(x=>x.expected===ch);return {ch,total:entries.length,accuracy:entries.length?Math.round(100*entries.filter(x=>x.correct).length/entries.length):0,avg:entries.filter(x=>x.correct).length?Math.round(entries.filter(x=>x.correct).reduce((sum,x)=>sum+x.ms,0)/entries.filter(x=>x.correct).length):0}}).filter(x=>x.total).sort((a,b)=>a.accuracy-b.accuracy||b.avg-a.avg);
  const confusions:Record<string,number>={};
- for(const h of history){if(!h.target||h.actual===undefined)continue;for(let i=0;i<h.target.length;i++){const expected=h.target[i],got=h.actual[i]||'∅';if(expected!==got){const key=expected+' → '+got;confusions[key]=(confusions[key]||0)+1}}}
+ for(const h of history){if(!h.target||h.actual===undefined)continue;for(let i=0;i<h.target.length;i++){const expected: string = h.target.charAt(i);const got: string = h.actual.charAt(i) || '∅';if(expected!==got){const key=expected+' → '+got;confusions[key]=(confusions[key]||0)+1}}}
  const topConfusions=Object.entries(confusions).sort((a,b)=>b[1]-a[1]).slice(0,8);
  function scheduleSpacing(dot:number){
   window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current);
