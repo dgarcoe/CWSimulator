@@ -104,6 +104,9 @@ function App(){
  const machineAccuracy=machineRecent.length?Math.round(100*machineRecent.filter(x=>x.correct).length/machineRecent.length):0;
  const machineTimes=machineRecent.filter(x=>x.correct).map(x=>x.ms);
  const machineAvg=machineTimes.length?Math.round(machineTimes.reduce((a,b)=>a+b,0)/machineTimes.length):0;
+ const machineMistakes=Object.entries(machineLog.filter(x=>!x.correct).reduce<Record<string,number>>((acc,x)=>{const key=x.expected+' → '+x.actual;acc[key]=(acc[key]||0)+1;return acc},{})).sort((a,b)=>b[1]-a[1]).slice(0,5);
+ const machineStreak=machineLog.slice().reverse().findIndex(x=>!x.correct);
+ const machineCurrentStreak=machineStreak===-1?machineLog.length:machineStreak;
  const machineByChar=KOCH.slice(0,lesson).split('').map(ch=>{const entries=machineLog.filter(x=>x.expected===ch);return {ch,total:entries.length,accuracy:entries.length?Math.round(100*entries.filter(x=>x.correct).length/entries.length):0,avg:entries.filter(x=>x.correct).length?Math.round(entries.filter(x=>x.correct).reduce((sum,x)=>sum+x.ms,0)/entries.filter(x=>x.correct).length):0}}).filter(x=>x.total).sort((a,b)=>a.accuracy-b.accuracy||b.avg-a.avg);
  const confusions:Record<string,number>={};
  for(const h of history){if(!h.target||h.actual===undefined)continue;for(let i=0;i<h.target.length;i++){const expected: string = h.target.charAt(i);const got: string = h.actual.charAt(i) || '∅';if(expected!==got){const key=expected+' → '+got;confusions[key]=(confusions[key]||0)+1}}}
@@ -198,6 +201,8 @@ function App(){
       <div className="machine-instruments">
        <div className="machine-readouts"><div><small>SESIÓN · ACIERTOS</small><strong>{machineHits}<em>/{machineAttempts}</em></strong></div><div><small>PRECISIÓN · ÚLTIMOS 80</small><strong>{machineRecent.length?machineAccuracy+'%':'—'}</strong></div><div><small>REACCIÓN MEDIA · ACIERTOS</small><strong>{machineAvg? (machineAvg/1000).toFixed(2)+' s':'—'}</strong></div></div>
        <div className="machine-plot"><div className="machine-section-label">REGISTRO DE RESPUESTAS <span>ÚLTIMAS 40</span></div><div className="machine-strip">{machineLog.slice(-40).map((entry,i)=><div key={i} className={entry.correct?'hit':'miss'} title={entry.expected+' → '+entry.actual+' · '+(entry.ms/1000).toFixed(2)+' s'}/>)}</div></div>
+       <div className="machine-plot"><div className="machine-section-label">RACHA ACTUAL <span>ACIERTOS CONSECUTIVOS</span></div><div className="machine-streak">{machineCurrentStreak} <small>caracteres sin error</small></div>
+       <div className="machine-plot"><div className="machine-section-label">CONFUSIONES MÁS FRECUENTES <span>HISTORIAL</span></div>{machineMistakes.length?<div className="machine-confusions">{machineMistakes.map(([pair,count])=><div key={pair}><b>{pair}</b><span>{count} {count===1?'error':'errores'}</span></div>)}</div>:<p className="fineprint">Sin confusiones registradas.</p>}</div></div>
        <div className="machine-plot"><div className="machine-section-label">PRECISIÓN POR CARÁCTER <span>{machineByChar.length} ACTIVOS CON DATOS</span></div>{machineByChar.length?<div className="machine-bars">{machineByChar.map(x=><div key={x.ch} className="machine-bar"><b>{x.ch}</b><div className="machine-track"><i style={{width:x.accuracy+'%'}}/></div><span>{x.accuracy}%</span><small>{x.total} int. · {x.avg?(x.avg/1000).toFixed(1)+' s':'—'}</small></div>)}</div>:<p className="fineprint">Los datos aparecerán después de tus primeras respuestas.</p>}</div>
       </div>
      </div>:<div className="exercise">
