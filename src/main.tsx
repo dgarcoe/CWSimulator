@@ -21,6 +21,7 @@ function App(){
  const [page,setPage]=useState<'academy'|'radio'|'hardware'>('academy');
  const [wpm,setWpm]=useState(20),[tone,setTone]=useState(700),[volume,setVolume]=useState(.2),[mode,setMode]=useState<'A'|'B'>('B');
  const [status,setStatus]=useState('Sin conectar'),[events,setEvents]=useState<string[]>([]),[decoded,setDecoded]=useState(''),[keys,setKeys]=useState<Record<Lever,boolean>>({dit:false,dah:false});
+ const kochAnswerRef=useRef<HTMLInputElement|null>(null);
  const [lesson,setLesson]=useState(()=>{try{return Math.max(2,Math.min(KOCH.length,Number(localStorage.getItem('cw-lesson'))||2))}catch{return 2}}),[trainingMode,setTrainingMode]=useState<'receive'|'send'|'machine'>('receive'),[trainingWpm,setTrainingWpm]=useState(20),[effectiveWpm,setEffectiveWpm]=useState(8),[target,setTarget]=useState(''),[answer,setAnswer]=useState(''),[trainingResult,setTrainingResult]=useState(''),[correct,setCorrect]=useState(0),[attempts,setAttempts]=useState(0);
  const [history,setHistory]=useState<{mode:string;lesson:number;score:number;target?:string;actual?:string;date?:string}[]>(()=>{try{return JSON.parse(localStorage.getItem('cw-academy-history')||'[]')}catch{return []}});
  const [autoAdvance,setAutoAdvance]=useState(true);
@@ -44,6 +45,7 @@ function App(){
  function flushLetter(){if(!sequence.current)return;const pattern=sequence.current;const char=MORSE[pattern]||'?';setRawSymbols(pattern);setDecoded(p=>p+char);sequence.current=''}
  function newExercise(){
   stopStation();
+  if(trainingMode==='receive')window.requestAnimationFrame(()=>kochAnswerRef.current?.focus());
   const pool=KOCH.slice(0,lesson);
   const sample=Array.from({length:5},()=>{const weights=pool.split('').map(ch=>1+Math.min(6,weaknesses[ch]||0));const total=weights.reduce((a,b)=>a+b,0);let draw=Math.random()*total;return pool.split('').find((ch,i)=>(draw-=weights[i])<0)||pool[pool.length-1]}).join('');
   setTarget(sample);setAnswer('');setTrainingResult('');setExerciseChecked(false);
@@ -209,7 +211,7 @@ function App(){
       <span className="eyebrow">{trainingMode==='receive'?'RECEPCIÓN / 5 CARACTERES':'ENVÍO / 5 CARACTERES'}</span>
       <div className="exercise-target">{!target?'LISTO':trainingMode==='receive'?'♫  ♫  ♫':target}</div>
       <p className="muted">{!target?'Prepara tus auriculares y empieza una sesión.':trainingMode==='receive'?'Escucha el grupo completo y escribe lo que has reconocido.':'Transmite el grupo con tus paletas; luego comprueba el resultado.'}</p>
-      {target&&trainingMode==='receive'&&<input className="textinput answer" aria-label="Respuesta escuchada" autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} maxLength={10} placeholder="Escribe lo que escuchas"/>}
+      {target&&trainingMode==='receive'&&<input ref={kochAnswerRef} className="textinput answer" aria-label="Respuesta escuchada" autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} maxLength={10} placeholder="Escribe lo que escuchas"/>}
       <div className="row"><button className="primary" onClick={newExercise}>{target?'Siguiente grupo':'Ejercicio libre'}</button>{target&&trainingMode==='receive'&&<button onClick={replayExercise}>Repetir sonido</button>}{target&&<button onClick={checkExercise} disabled={exerciseChecked}>Comprobar</button>}</div>
       {trainingResult&&<p className="result" role="status">{trainingResult}</p>}
      </div>}
