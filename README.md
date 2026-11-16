@@ -59,3 +59,7 @@ This is a design requirement, **not yet implemented** in v0.1. The current keybo
 ## Next milestone: receive a virtual station (prototype)
 
 The decoder now recognizes word spaces after seven dot units of silence, while letters are finalized after three units. The new virtual-station panel plays an editable CQ message as scheduled CW audio. This is a listening exercise, **not yet an interactive QSO**: the station does not decode your answer or react to it. HF noise/fading sliders are still placeholders.
+
+## CW Academy (early prototype)
+
+The Academy offers Koch-style progressive character sets, five-character listening drills, paddle transmission drills, and independently adjustable character and effective speeds (Farnsworth spacing). Listening drills deliberately hide Morse dot/dash patterns. Answers are checked by character position, with simple session counters. Lesson progression is manual for now; persistent progress, adaptive review, timed performance analytics, and rigorous iambic timing feedback are future work. The training module has not yet been hardware-tested or build-verified.
