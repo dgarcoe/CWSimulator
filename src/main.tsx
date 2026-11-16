@@ -7,6 +7,7 @@ type Lever = 'dit'|'dah';
 const KOCH='KMRSUAPTLOWI.NJEF0YVG5/Q9ZH38B?427C1D6X'.replace(/[^A-Z0-9]/g,'');
 const MORSE: Record<string,string> = {'.-':'A','-...':'B','-.-.':'C','-..':'D','.':'E','..-.':'F','--.':'G','....':'H','..':'I','.---':'J','-.-':'K','.-..':'L','--':'M','-.':'N','---':'O','.--.':'P','--.-':'Q','.-.':'R','...':'S','-':'T','..-':'U','...-':'V','.--':'W','-..-':'X','-.--':'Y','--..':'Z','-----':'0','.----':'1','..---':'2','...--':'3','....-':'4','.....':'5','-....':'6','--...':'7','---..':'8','----.':'9'};
 function App(){
+ const [rawSymbols,setRawSymbols]=useState('');
  const [page,setPage]=useState<'academy'|'radio'|'hardware'>('academy');
  const [wpm,setWpm]=useState(20),[tone,setTone]=useState(700),[volume,setVolume]=useState(.2),[mode,setMode]=useState<'A'|'B'>('B');
  const [status,setStatus]=useState('Sin conectar'),[events,setEvents]=useState<string[]>([]),[decoded,setDecoded]=useState(''),[keys,setKeys]=useState<Record<Lever,boolean>>({dit:false,dah:false});
@@ -30,7 +31,7 @@ function App(){
  function log(s:string){setEvents(p=>[new Date().toLocaleTimeString()+' '+s,...p].slice(0,40))}
  async function initAudio(){if(!audio.current){const ctx=new AudioContext();const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=toneRef.current;g.gain.value=0;o.connect(g).connect(ctx.destination);o.start();audio.current=ctx;osc.current=o;gain.current=g}await audio.current.resume()}
  function sidetone(on:boolean){sounding.current=on;const c=audio.current,g=gain.current;if(c&&g)g.gain.setTargetAtTime(on?volumeRef.current:0,c.currentTime,.003)}
- function flushLetter(){if(!sequence.current)return;const char=MORSE[sequence.current]||'?';setDecoded(p=>p+char);sequence.current=''}
+ function flushLetter(){if(!sequence.current)return;const pattern=sequence.current;const char=MORSE[pattern]||'?';setRawSymbols(pattern);setDecoded(p=>p+char);sequence.current=''}
  function newExercise(){
   stopStation();
   const pool=KOCH.slice(0,lesson);
@@ -113,7 +114,7 @@ function App(){
  useEffect(()=>()=>{window.clearTimeout(timer.current);window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current);window.clearTimeout(rxTimeout.current);rxPlayback.current?.stop();void audio.current?.close()},[]);
  return <main className="app-shell">
   <aside className="sidebar">
-   <div className="identity"><div className="mark">CW<span>·</span></div><div><strong>FARO</strong><small>CW SIMULATOR</small></div></div>
+   <div className="identity"><div className="mark">CW</div><div><strong>CW / LAB</strong><small>RECEPCIÓN · TRANSMISIÓN</small></div></div>
    <p className="nav-caption">ESTACIÓN DE APRENDIZAJE</p>
    <nav aria-label="Navegación principal">
     <button className={page==='academy'?'nav-item selected':'nav-item'} onClick={()=>setPage('academy')}><span>01</span> Academia</button>
@@ -123,7 +124,7 @@ function App(){
    <div className="sidebar-bottom"><div className="live-dot"/> OPERACIÓN LOCAL <p>Una estación para aprender a escuchar antes de contar.</p></div>
   </aside>
   <div className="workspace">
-   <header className="topbar"><div><span className="eyebrow">FARO / {page==='academy'?'ACADEMIA':page==='radio'?'ESTACIÓN':'HARDWARE'}</span><h1>{page==='academy'?'Entrena el oído.':page==='radio'?'En el aire.':'Tu manipulador.'}</h1><p>{page==='academy'?'Reconoce el ritmo, no los signos.':page==='radio'?'Prueba el receptor y la transmisión CW.':'Configura las levas una sola vez.'}</p></div><div className="topbar-meta"><span className="status-light"/> {wpm} WPM <span className="separator">/</span> {tone} Hz</div></header>
+   <header className="topbar"><div><span className="eyebrow">CW LAB / {page==='academy'?'ACADEMIA':page==='radio'?'ESTACIÓN':'HARDWARE'}</span><h1>{page==='academy'?'Entrena el oído.':page==='radio'?'En el aire.':'Tu manipulador.'}</h1><p>{page==='academy'?'Reconoce el ritmo, no los signos.':page==='radio'?'Prueba el receptor y la transmisión CW.':'Configura las levas una sola vez.'}</p></div><div className="topbar-meta"><span className="status-light"/> {wpm} WPM <span className="separator">/</span> {tone} Hz</div></header>
    {page==='academy'&&<div className="content-grid">
     <section className="panel hero-panel">
      <div className="panel-kicker">01 / ENTRENAMIENTO</div><h2>Aprender escuchando</h2><p className="muted">Koch + Farnsworth. Cada carácter conserva su sonido natural, con pausas más largas al principio.</p>
@@ -153,17 +154,17 @@ function App(){
     <section className="panel"><div className="panel-kicker">02 / ESTACIÓN REMOTA</div><h2>Escucha una llamada</h2><p className="muted">Una estación transmite un mensaje de prueba. Todavía no responde a tu indicativo.</p><label>Mensaje CW<input className="textinput" value={rxMessage} onChange={e=>setRxMessage(e.target.value.toUpperCase())} maxLength={100}/></label><div className="row"><button className="primary" disabled={rxPlaying} onClick={()=>void transmitStation()}>Escuchar CQ</button><button disabled={!rxPlaying} onClick={stopStation}>Detener</button></div>
      <div className="panel-kicker space-top">PROPAGACIÓN · PRÓXIMAMENTE</div><p className="muted">QRN y QSB todavía no modifican el sonido.</p><label>QRN <b>{qrn}%</b><input type="range" value={qrn} onChange={e=>setQrn(+e.target.value)}/></label><label>QSB <b>{qsb}%</b><input type="range" value={qsb} onChange={e=>setQsb(+e.target.value)}/></label>
     </section>
-    <section className="panel full-width"><div className="panel-kicker">03 / TU TRANSMISIÓN</div><h2>Texto recibido del manipulador</h2><div className="decoded">{decoded||'A la espera de una transmisión…'}</div><div className="row"><button onClick={()=>{sequence.current='';window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current);setDecoded('')}}>Limpiar texto</button><button onClick={()=>setPage('hardware')}>Configurar paletas</button></div></section>
+    <section className="panel full-width"><div className="panel-kicker">03 / TU TRANSMISIÓN</div><h2>Texto recibido del manipulador</h2><div className="decoded">{decoded||'A la espera de una transmisión…'}</div><p className="fineprint">Último carácter: {rawSymbols?rawSymbols.length+' elementos detectados':'sin datos'} · O = 3 rayas; 0 = 5 rayas. Si aparece O al transmitir 0, comprueba que el keyer ha generado las cinco rayas antes de soltar la leva.</p><div className="row"><button onClick={()=>{sequence.current='';window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current);setDecoded('');setRawSymbols('')}}>Limpiar texto</button><button onClick={()=>setPage('hardware')}>Configurar paletas</button></div></section>
    </div>}
    {page==='hardware'&&<div className="content-grid">
     <section className="panel"><div className="panel-kicker">01 / MAPEO</div><h2>Aprendizaje de teclas</h2><p className="muted">Selecciona una leva y púlsala en tu manipulador. El navegador guardará el código de tecla.</p><div className="mapping"><button onClick={()=>setLearning('dit')}>{learning==='dit'?'Pulsa la leva…':'Aprender DIT'}<small>{mapping.dit}</small></button><button onClick={()=>setLearning('dah')}>{learning==='dah'?'Pulsa la leva…':'Aprender DAH'}<small>{mapping.dah}</small></button></div><button onClick={()=>setMapping(p=>({dit:p.dah,dah:p.dit}))}>Intercambiar levas</button>{mapping.dit===mapping.dah&&<p role="alert">Las dos levas usan la misma tecla.</p>}
     </section>
-    <section className="panel"><div className="panel-kicker">02 / PRUEBA</div><h2>Estado de las paletas</h2><p className="muted">Puedes pulsar los botones con el ratón o utilizar el manipulador USB.</p><div className="paddles"><button className={keys.dit?'active':''} onPointerDown={()=>setLever('dit',true)} onPointerUp={()=>setLever('dit',false)} onPointerLeave={()=>setLever('dit',false)}>DIT<span>·</span></button><button className={keys.dah?'active':''} onPointerDown={()=>setLever('dah',true)} onPointerUp={()=>setLever('dah',false)} onPointerLeave={()=>setLever('dah',false)}>DAH<span>—</span></button></div><div className="decoded">{decoded||'Esperando…'}</div>
+    <section className="panel"><div className="panel-kicker">02 / PRUEBA</div><h2>Estado de las paletas</h2><p className="muted">Puedes pulsar los botones con el ratón o utilizar el manipulador USB.</p><div className="paddles"><button className={keys.dit?'active':''} onPointerDown={()=>setLever('dit',true)} onPointerUp={()=>setLever('dit',false)} onPointerLeave={()=>setLever('dit',false)}>DIT<span>·</span></button><button className={keys.dah?'active':''} onPointerDown={()=>setLever('dah',true)} onPointerUp={()=>setLever('dah',false)} onPointerLeave={()=>setLever('dah',false)}>DAH<span>—</span></button></div><div className="decoded">{decoded||'Esperando…'}</div><p className="fineprint">Último carácter: {rawSymbols?rawSymbols.length+' elementos':'—'} · 0 requiere cinco rayas.</p>
     </section>
     <section className="panel"><div className="panel-kicker">03 / OTROS PROTOCOLOS</div><h2>Identificación USB</h2><p className="muted">La detección HID y serie identifica dispositivos, pero la lectura de sus datos aún está pendiente.</p><div className="row"><button onClick={connectSerial}>Buscar USB serie</button><button onClick={connectHid}>Buscar USB HID</button></div><p><b>{status}</b></p><p className="muted">{deviceInfo}</p></section>
     <section className="panel"><div className="panel-kicker">04 / DIAGNÓSTICO</div><h2>Eventos recientes</h2><div className="log">{events.length?events.map((e,i)=><div key={i}>{e}</div>):'Sin eventos'}</div></section>
    </div>}
-   <footer>FARO · CW SIMULATOR <span>PROTOTIPO LOCAL / SIN TRANSMISIÓN RF</span></footer>
+   <footer>CW SIMULATOR <span>PROTOTIPO LOCAL / SIN TRANSMISIÓN RF</span></footer>
   </div>
  </main>
 }
