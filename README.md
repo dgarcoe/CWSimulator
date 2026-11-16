@@ -67,3 +67,7 @@ The Academy offers Koch-style progressive character sets, five-character listeni
 ## Academy charts, tone and appearance
 
 The Academy has an independent listening pitch slider (350–1000 Hz), a tone preview, a line chart for the latest 24 scored exercises, and a bar view of characters receiving extra adaptive practice. The app now offers three locally persisted color schemes: Paper (default), Slate and Sand. Training pitch is separate from the station sidetone. These features have been committed but are awaiting local build and browser validation.
+
+## Guided training and CW keyboard
+
+The Academy now supports guided blocks of 5, 10 or 20 exercises, a session average, a character confusion summary based on stored target/answer pairs, and a CW Keyboard mode that plays typed text as Morse using Academy speed, effective speed and pitch. Keyboard mode currently converts the full entered text on demand; it does not yet stream each keystroke in real time. Slate is the default for new installs; existing saved palette choices remain unchanged. Session progress is not yet persisted, and exercises advance manually. Changes require local build and browser testing.
