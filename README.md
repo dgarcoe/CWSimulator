@@ -55,3 +55,7 @@ CWSimulator MUST NOT hardcode vendor IDs, product IDs, key mappings or serial pr
 - Hardware timestamps and keyer buffering should be used where available to minimize browser scheduling jitter.
 
 This is a design requirement, **not yet implemented** in v0.1. The current keyboard mapping remains hardcoded and USB selection is identification-only.
+
+## Next milestone: receive a virtual station (prototype)
+
+The decoder now recognizes word spaces after seven dot units of silence, while letters are finalized after three units. The new virtual-station panel plays an editable CQ message as scheduled CW audio. This is a listening exercise, **not yet an interactive QSO**: the station does not decode your answer or react to it. HF noise/fading sliders are still placeholders.
