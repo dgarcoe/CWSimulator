@@ -153,3 +153,16 @@ footer{margin-top:20px;padding:13px 0}
 .sidebar .nav-item .nav-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .sidebar .nav-item.selected .nav-icon{color:var(--accent)}
 @media(max-width:680px){.sidebar .nav-item{justify-content:center;gap:6px}.sidebar .nav-item .nav-icon{display:inline-flex;width:19px;height:19px;flex-basis:19px}.sidebar .nav-item .nav-icon svg{width:19px;height:19px}}
+
+.progress-filter{display:flex;align-items:center;gap:10px;margin:12px 0}
+.progress-filter label{font-size:11px;color:var(--muted)}
+.progress-filter select{max-width:220px;padding:7px 9px;border:1px solid var(--line);background:var(--inset);color:var(--ink);font:inherit;font-size:12px}
+.lesson-progress{margin-top:18px;border-top:1px solid var(--line);padding-top:16px}
+.lesson-progress h3{font-size:13px;margin:0 0 5px}
+.lesson-progress-bars{display:flex;align-items:stretch;gap:5px;overflow-x:auto;padding:12px 0}
+.lesson-progress-bars button{flex:0 0 42px;min-width:42px;display:flex;flex-direction:column;align-items:center;gap:5px;padding:6px 3px;background:var(--inset);border:1px solid var(--line);color:var(--ink);font-size:10px}
+.lesson-progress-bars button.selected{border-color:var(--accent)}
+.lesson-progress-bars button span,.lesson-progress-bars button strong{font-size:10px}
+.lesson-progress-bars button small{font-size:9px;color:var(--muted)}
+.lesson-progress-track{height:85px;width:13px;background:var(--panel);display:flex;align-items:end;border:1px solid var(--line)}
+.lesson-progress-track i{display:block;width:100%;background:var(--chart);min-height:1px}
