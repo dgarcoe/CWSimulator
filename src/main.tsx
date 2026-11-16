@@ -7,6 +7,10 @@ type Lever = 'dit'|'dah';
 const KOCH='KMRSUAPTLOWI.NJEF0YVG5/Q9ZH38B?427C1D6X'.replace(/[^A-Z0-9]/g,'');
 const MORSE: Record<string,string> = {'.-':'A','-...':'B','-.-.':'C','-..':'D','.':'E','..-.':'F','--.':'G','....':'H','..':'I','.---':'J','-.-':'K','.-..':'L','--':'M','-.':'N','---':'O','.--.':'P','--.-':'Q','.-.':'R','...':'S','-':'T','..-':'U','...-':'V','.--':'W','-..-':'X','-.--':'Y','--..':'Z','-----':'0','.----':'1','..---':'2','...--':'3','....-':'4','.....':'5','-....':'6','--...':'7','---..':'8','----.':'9'};
 function App(){
+ const [palette,setPalette]=useState<'paper'|'slate'|'sand'>(()=>{const v=localStorage.getItem('cw-palette');return v==='slate'||v==='sand'?v:'paper'});
+ const [trainingTone,setTrainingTone]=useState(()=>Number(localStorage.getItem('cw-training-tone'))||600);
+ useEffect(()=>{localStorage.setItem('cw-palette',palette)},[palette]);
+ useEffect(()=>{localStorage.setItem('cw-training-tone',String(trainingTone))},[trainingTone]);
  const [rawSymbols,setRawSymbols]=useState('');
  const [page,setPage]=useState<'academy'|'radio'|'hardware'>('academy');
  const [wpm,setWpm]=useState(20),[tone,setTone]=useState(700),[volume,setVolume]=useState(.2),[mode,setMode]=useState<'A'|'B'>('B');
@@ -38,9 +42,9 @@ function App(){
   const sample=Array.from({length:5},()=>{const weights=pool.split('').map(ch=>1+Math.min(6,weaknesses[ch]||0));const total=weights.reduce((a,b)=>a+b,0);let draw=Math.random()*total;return pool.split('').find((ch,i)=>(draw-=weights[i])<0)||pool[pool.length-1]}).join('');
   setTarget(sample);setAnswer('');setTrainingResult('');setExerciseChecked(false);
   if(trainingMode==='send'){sequence.current='';setDecoded('');window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current)}
-  else void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,sample,trainingWpm,toneRef.current,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)});
+  else void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,sample,trainingWpm,trainingTone,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)});
  }
- function replayExercise(){if(!target)return;stopStation();void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,target,trainingWpm,toneRef.current,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
+ function replayExercise(){if(!target)return;stopStation();void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,target,trainingWpm,trainingTone,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
  function checkExercise(){
   if(!target||exerciseChecked)return;
   const actual=(trainingMode==='receive'?answer:decoded).replace(/\s/g,'').toUpperCase();
@@ -112,7 +116,10 @@ function App(){
  async function connectSerial(){try{const nav=navigator as Navigator&{serial?:{requestPort:()=>Promise<any>}};if(!nav.serial){setStatus('Web Serial no disponible');return}const port=await nav.serial.requestPort();const info=port.getInfo();setDeviceInfo('USB serie VID '+info.usbVendorId+' PID '+info.usbProductId);setStatus('Puerto seleccionado; protocolo pendiente de identificar');log('Puerto serie seleccionado. No se envían comandos ni se abre el puerto sin conocer el protocolo.')}catch(e){setStatus('Serie: '+String(e))}}
  async function connectHid(){try{const nav=navigator as Navigator&{hid?:{requestDevice:(o:{filters:object[]})=>Promise<any[]>}};if(!nav.hid){setStatus('WebHID no disponible');return}const devices=await nav.hid.requestDevice({filters:[]});if(!devices.length)return;const d=devices[0];setDeviceInfo(d.productName+' VID '+d.vendorId+' PID '+d.productId);setStatus('HID identificado; falta asignar bits de las levas');log('HID seleccionado: '+d.productName)}catch(e){setStatus('HID: '+String(e))}}
  useEffect(()=>()=>{window.clearTimeout(timer.current);window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current);window.clearTimeout(rxTimeout.current);rxPlayback.current?.stop();void audio.current?.close()},[]);
- return <main className="app-shell">
+ const trend=history.slice(-24);
+ const plotPoints=trend.map((h,i)=>`${30+(trend.length===1?0:i*600/(trend.length-1))},${160-h.score*1.35}`).join(' ');
+ const weakTop=Object.entries(weaknesses).filter(([ch])=>KOCH.slice(0,lesson).includes(ch)).sort((a,b)=>b[1]-a[1]).slice(0,6);
+ return <main className={'app-shell theme-'+palette}>
   <aside className="sidebar">
    <div className="identity"><div className="mark">CW</div><div><strong>CW / LAB</strong><small>RECEPCIÓN · TRANSMISIÓN</small></div></div>
    <p className="nav-caption">ESTACIÓN DE APRENDIZAJE</p>
@@ -124,7 +131,7 @@ function App(){
    <div className="sidebar-bottom"><div className="live-dot"/> OPERACIÓN LOCAL <p>Una estación para aprender a escuchar antes de contar.</p></div>
   </aside>
   <div className="workspace">
-   <header className="topbar"><div><span className="eyebrow">CW LAB / {page==='academy'?'ACADEMIA':page==='radio'?'ESTACIÓN':'HARDWARE'}</span><h1>{page==='academy'?'Entrena el oído.':page==='radio'?'En el aire.':'Tu manipulador.'}</h1><p>{page==='academy'?'Reconoce el ritmo, no los signos.':page==='radio'?'Prueba el receptor y la transmisión CW.':'Configura las levas una sola vez.'}</p></div><div className="topbar-meta"><span className="status-light"/> {wpm} WPM <span className="separator">/</span> {tone} Hz</div></header>
+   <header className="topbar"><div><span className="eyebrow">CW LAB / {page==='academy'?'ACADEMIA':page==='radio'?'ESTACIÓN':'HARDWARE'}</span><h1>{page==='academy'?'Entrena el oído.':page==='radio'?'En el aire.':'Tu manipulador.'}</h1><p>{page==='academy'?'Reconoce el ritmo, no los signos.':page==='radio'?'Prueba el receptor y la transmisión CW.':'Configura las levas una sola vez.'}</p></div><div className="topbar-meta"><label className="theme-select">Apariencia <select aria-label="Apariencia" value={palette} onChange={e=>setPalette(e.target.value as 'paper'|'slate'|'sand')}><option value="paper">Papel</option><option value="slate">Pizarra</option><option value="sand">Arena</option></select></label></div></header>
    {page==='academy'&&<div className="content-grid">
     <section className="panel hero-panel">
      <div className="panel-kicker">01 / ENTRENAMIENTO</div><h2>Aprender escuchando</h2><p className="muted">Koch + Farnsworth. Cada carácter conserva su sonido natural, con pausas más largas al principio.</p>
@@ -142,10 +149,23 @@ function App(){
      <label>Lección Koch <b>{lesson} / {KOCH.length}</b><input type="range" min="2" max={KOCH.length} value={lesson} onChange={e=>setLesson(+e.target.value)}/></label>
      <p className="character-set">CARACTERES ACTIVOS<br/><strong>{KOCH.slice(0,lesson).split('').join('  ')}</strong></p>
      <label>Velocidad del carácter <b>{trainingWpm} WPM</b><input type="range" min="15" max="35" value={trainingWpm} onChange={e=>setTrainingWpm(+e.target.value)}/></label>
-     <label>Velocidad efectiva <b>{Math.min(effectiveWpm,trainingWpm)} WPM</b><input type="range" min="5" max={trainingWpm} value={Math.min(effectiveWpm,trainingWpm)} onChange={e=>setEffectiveWpm(+e.target.value)}/></label>
+     <label>Tono de escucha <b>{trainingTone} Hz</b><input type="range" min="350" max="1000" step="25" value={trainingTone} onChange={e=>setTrainingTone(+e.target.value)}/></label><button onClick={()=>{void initAudio().then(()=>{stopStation();rxPlayback.current=playCw(audio.current!,'VVV',trainingWpm,trainingTone,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}}>Probar tono</button><label>Velocidad efectiva <b>{Math.min(effectiveWpm,trainingWpm)} WPM</b><input type="range" min="5" max={trainingWpm} value={Math.min(effectiveWpm,trainingWpm)} onChange={e=>setEffectiveWpm(+e.target.value)}/></label>
      <label className="checkbox-label"><input type="checkbox" checked={autoAdvance} onChange={e=>setAutoAdvance(e.target.checked)}/> Avanzar automáticamente tras 10 ejercicios con ≥90% de media</label><p className="fineprint">Consejo: mantén 20 WPM de carácter y empieza con 8 WPM efectivos. Sube de lección tras alcanzar un 90% de precisión de forma consistente.</p>
     </section>
-    <section className="panel full-width"><div className="panel-kicker">03 / TU PROGRESO</div><div className="stats"><div><strong>{history.length}</strong><span>Ejercicios registrados</span></div><div><strong>{history.length?Math.round(history.reduce((sum,h)=>sum+h.score,0)/history.length):'—'}{history.length?'%':''}</strong><span>Precisión media</span></div><div><strong>{history.slice(-10).length?Math.round(history.slice(-10).reduce((sum,h)=>sum+h.score,0)/history.slice(-10).length)+'%':'—'}</strong><span>Últimos diez</span></div></div><p className="fineprint">Los caracteres con más errores aparecen con mayor frecuencia en nuevos ejercicios. El historial se conserva en este navegador. Puedes activar o desactivar el avance automático.</p></section>
+    <section className="panel full-width"><div className="panel-kicker">03 / TU PROGRESO</div><div className="stats"><div><strong>{history.length}</strong><span>Ejercicios registrados</span></div><div><strong>{history.length?Math.round(history.reduce((sum,h)=>sum+h.score,0)/history.length):'—'}{history.length?'%':''}</strong><span>Precisión media</span></div><div><strong>{history.slice(-10).length?Math.round(history.slice(-10).reduce((sum,h)=>sum+h.score,0)/history.slice(-10).length)+'%':'—'}</strong><span>Últimos diez</span></div></div><div className="analytics">
+      <div><h3>Evolución de precisión</h3><p className="fineprint">Últimos {trend.length} ejercicios · cada punto es un ejercicio</p>
+       {trend.length?<svg className="trend-chart" viewBox="0 0 660 190" role="img" aria-label="Evolución de la precisión en los últimos ejercicios">
+        {[0,50,100].map(v=><g key={v}><line x1="30" x2="630" y1={160-v*1.35} y2={160-v*1.35} stroke="currentColor" strokeOpacity=".15"/><text x="3" y={164-v*1.35} fontSize="12" fill="currentColor">{v}</text></g>)}
+        <line x1="30" y1="38.5" x2="630" y2="38.5" stroke="var(--accent)" strokeDasharray="5 6" strokeOpacity=".6"/>
+        <polyline points={plotPoints} fill="none" stroke="var(--chart)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>
+        {trend.map((h,i)=><circle key={i} cx={30+(trend.length===1?0:i*600/(trend.length-1))} cy={160-h.score*1.35} r="4" fill="var(--chart)"><title>{h.score}% · lección {h.lesson} · {h.mode==='receive'?'escucha':'transmisión'}</title></circle>)}
+       </svg>:<p className="empty-chart">Completa un ejercicio para comenzar a dibujar tu progreso.</p>}
+      </div>
+      <div><h3>Caracteres a reforzar</h3><p className="fineprint">Peso de repaso según errores acumulados</p>
+       {weakTop.length&&weakTop.some(([,v])=>v>0)?<div className="weak-chart">{weakTop.map(([ch,value])=><div className="weak-row" key={ch}><span>{ch}</span><div className="weak-track"><div style={{width:Math.max(2,value/Math.max(1,...weakTop.map(([,n])=>n))*100)+'%'}}/></div><small>{value.toFixed(1)}</small></div>)}</div>:<p className="empty-chart">Los caracteres difíciles aparecerán aquí conforme practiques.</p>}
+      </div>
+     </div>
+     <p className="fineprint">Los caracteres con más errores aparecen con mayor frecuencia en nuevos ejercicios. El historial se conserva en este navegador. Puedes activar o desactivar el avance automático.</p></section>
    </div>}
    {page==='radio'&&<div className="content-grid">
     <section className="panel"><div className="panel-kicker">01 / TRANSCEPTOR</div><h2>Banco de radio</h2><div className="frequency"><span>VFO A · CW</span><strong>7.025.000 <small>Hz</small></strong><span>RX · {tone} Hz · {wpm} WPM</span></div>
