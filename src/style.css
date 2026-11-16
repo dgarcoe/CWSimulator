@@ -52,3 +52,5 @@
 .confusion-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}
 .confusion-list>div{display:flex;justify-content:space-between;gap:8px;padding:12px;background:var(--inset);font-size:13px}
 .confusion-list span{color:var(--muted);font-size:11px}
+
+.machine-status{margin:18px 0;padding:16px;border:1px solid var(--line);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--chart)}.machine-feedback{font-size:14px;color:var(--ink)}.machine-score{font-size:13px;color:var(--muted);margin-top:20px}
