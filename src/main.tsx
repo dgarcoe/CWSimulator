@@ -183,7 +183,7 @@ function App(){
  const lessonReady=recentLesson.length>=10&&recentLessonAverage>=90;
  const rollingTrend=trend.map((_,i)=>{const sample=trend.slice(Math.max(0,i-4),i+1);return sample.reduce((sum,h)=>sum+h.score,0)/sample.length});
  const rollingPoints=rollingTrend.map((score,i)=>`${30+(trend.length===1?0:i*600/(trend.length-1))},${160-score*1.35}`).join(' ');
- function exportProgress(){const rows=[['fecha','modo','leccion','precision','objetivo','respuesta'],...history.map(h=>[h.date||'',h.mode,String(h.lesson),String(h.score),h.target||'',h.actual||''])];const csv='\uFEFF'+rows.map(row=>row.map(value=>'"'+String(value).replace(/"/g,'""')+'"').join(';')).join('\\r\\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='cwsimulator-progreso.csv';link.click();URL.revokeObjectURL(url)}
+ function exportProgress(){const rows=[['fecha','modo','leccion','precision','objetivo','respuesta'],...history.map(h=>[h.date||'',h.mode,String(h.lesson),String(h.score),h.target||'',h.actual||''])];const csv='\uFEFF'+rows.map(row=>row.map(value=>'"'+String(value).replace(/"/g,'""')+'"').join(';')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='cwsimulator-progreso.csv';link.click();URL.revokeObjectURL(url)}
  const plotPoints=trend.map((h,i)=>`${30+(trend.length===1?0:i*600/(trend.length-1))},${160-h.score*1.35}`).join(' ');
  const weakTop=Object.entries(weaknesses).filter(([ch])=>KOCH.slice(0,lesson).includes(ch)).sort((a,b)=>b[1]-a[1]).slice(0,6);
  return <main className={'app-shell theme-'+palette}>
