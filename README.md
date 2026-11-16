@@ -63,3 +63,7 @@ The decoder now recognizes word spaces after seven dot units of silence, while l
 ## CW Academy (early prototype)
 
 The Academy offers Koch-style progressive character sets, five-character listening drills, paddle transmission drills, and independently adjustable character and effective speeds (Farnsworth spacing). Listening drills deliberately hide Morse dot/dash patterns. Answers are checked by character position, with simple session counters. Lesson progression is manual for now; persistent progress, adaptive review, timed performance analytics, and rigorous iambic timing feedback are future work. The training module has not yet been hardware-tested or build-verified.
+
+## Academy charts, tone and appearance
+
+The Academy has an independent listening pitch slider (350–1000 Hz), a tone preview, a line chart for the latest 24 scored exercises, and a bar view of characters receiving extra adaptive practice. The app now offers three locally persisted color schemes: Paper (default), Slate and Sand. Training pitch is separate from the station sidetone. These features have been committed but are awaiting local build and browser validation.
