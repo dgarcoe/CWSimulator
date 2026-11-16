@@ -54,3 +54,62 @@
 .confusion-list span{color:var(--muted);font-size:11px}
 
 .machine-status{margin:18px 0;padding:16px;border:1px solid var(--line);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--chart)}.machine-feedback{font-size:14px;color:var(--ink)}.machine-score{font-size:13px;color:var(--muted);margin-top:20px}
+
+/* Compact receiver-workstation typography: system mono, tabular metrics, no web font dependency. */
+:root{font-family:Consolas,'Cascadia Code','Lucida Console',monospace;font-size:12px;line-height:1.45}
+button,input,select,textarea{font:inherit}
+.app-shell{grid-template-columns:198px minmax(0,1fr)}
+.sidebar{padding:20px 13px;gap:30px}
+.identity{gap:8px}.identity strong{font:700 15px/1.1 Consolas,monospace!important;letter-spacing:0!important}
+.identity small{font-size:9px;letter-spacing:.5px}
+.mark{font:700 21px Consolas,monospace!important;padding-bottom:3px}
+.nav-caption,.eyebrow,.panel-kicker{font-size:10px;letter-spacing:.8px}
+.nav-item{padding:10px 9px;font-size:12px}.nav-item span{font:11px Consolas,monospace;margin-right:9px}
+.workspace{padding:24px clamp(15px,3vw,40px) 12px;max-width:1500px}
+.topbar{padding-bottom:17px;margin-bottom:18px;align-items:center}
+.topbar h1{font:700 clamp(23px,2.7vw,35px)/1.15 Consolas,monospace!important;letter-spacing:-1px!important;margin:5px 0 8px}
+.topbar p{font-size:11px}
+.content-grid{gap:12px;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr)}
+.panel{padding:clamp(15px,1.8vw,24px)}
+.panel h2{font:700 19px/1.25 Consolas,monospace!important;letter-spacing:-.5px;margin:8px 0 12px}
+.panel h3{font:700 13px Consolas,monospace!important}
+.panel label{font-size:11px;margin:14px 0}
+.panel input[type=range]{margin-top:8px}
+.muted{font-size:11px;line-height:1.5}
+.fineprint{font-size:10px;line-height:1.5}
+button{padding:8px 11px;font-size:11px}
+.mode-switch{margin:13px 0;gap:4px}.mode-switch button{min-width:100px;padding:9px 7px}
+.exercise{padding:16px;margin-top:9px}.exercise-target{font:700 40px Consolas,monospace;min-height:57px;letter-spacing:2px}
+.stats{gap:9px;margin:12px 0}.stats strong{font:700 28px Consolas,monospace}
+.stats span{font-size:10px}
+.character-set{padding:10px;font-size:10px}.character-set strong{font:700 16px Consolas,monospace;letter-spacing:2px}
+.frequency{padding:14px;gap:7px}.frequency strong{font:700 clamp(25px,3vw,42px) Consolas,monospace}
+.decoded{padding:13px;min-height:65px;font:500 20px Consolas,monospace}
+.panel select,.textinput{padding:9px 10px;margin-top:6px}
+.analytics{gap:20px;padding-top:16px;margin-top:15px}
+footer{margin-top:20px;padding:13px 0}
+.machine-console{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(270px,.85fr);gap:12px;margin-top:13px}
+.machine-stage{background:var(--inset);border:1px solid var(--line);padding:14px;display:flex;flex-direction:column;min-height:330px}
+.machine-head,.machine-section-label{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:9px;letter-spacing:.8px}
+.machine-display{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:9px;padding:20px 4px}
+.machine-display strong{font-size:clamp(21px,2.8vw,36px);letter-spacing:1px;color:var(--ink)}
+.machine-display span{font-size:10px;color:var(--muted);max-width:260px}
+.machine-signal{color:var(--chart);font-size:28px}
+.machine-controls{display:flex;flex-wrap:wrap;gap:6px}
+.machine-answer{margin-top:10px!important;text-align:center;letter-spacing:2px}
+.machine-feedback{min-height:18px;font-size:11px;color:var(--accent);margin:12px 0 0}
+.machine-instruments{border:1px solid var(--line);padding:13px;background:var(--panel);display:flex;flex-direction:column;gap:16px}
+.machine-readouts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.machine-readouts>div{min-width:0;border-bottom:1px solid var(--line);padding-bottom:10px}
+.machine-readouts small{font-size:9px;color:var(--muted);display:block;min-height:26px}
+.machine-readouts strong{font:700 clamp(15px,1.8vw,24px) Consolas,monospace;color:var(--chart);white-space:nowrap}
+.machine-readouts em{font-style:normal;color:var(--muted);font-size:12px}
+.machine-plot{border-top:1px solid var(--line);padding-top:11px}
+.machine-strip{display:flex;gap:3px;flex-wrap:wrap;margin-top:11px;min-height:14px}
+.machine-strip>div{width:9px;height:13px;background:var(--chart)}.machine-strip>div.miss{background:var(--accent)}
+.machine-bars{display:grid;gap:8px;margin-top:12px;max-height:200px;overflow:auto}
+.machine-bar{display:grid;grid-template-columns:15px minmax(0,1fr) 36px 100px;align-items:center;gap:6px;font-size:10px}
+.machine-bar b{color:var(--ink)}.machine-bar span{text-align:right;color:var(--ink)}.machine-bar small{color:var(--muted);text-align:right;font-size:9px}
+.machine-track{height:7px;background:var(--inset);border:1px solid var(--line)}.machine-track i{display:block;height:100%;background:var(--chart)}
+@media(max-width:1050px){.app-shell{grid-template-columns:170px minmax(0,1fr)}.machine-console{grid-template-columns:1fr}.machine-stage{min-height:270px}}
+@media(max-width:680px){.app-shell{display:block}.sidebar{padding:10px}.workspace{padding:15px 10px}.machine-bar{grid-template-columns:15px 1fr 35px 75px}.topbar{align-items:start}.topbar h1{font-size:24px}}
