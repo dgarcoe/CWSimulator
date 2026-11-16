@@ -12,14 +12,52 @@ function App(){
  const [learning,setLearning]=useState<Lever|null>(null);
  useEffect(()=>{localStorage.setItem('cw-keyboard-map',JSON.stringify(mapping))},[mapping]);
  const audio=useRef<AudioContext|null>(null),osc=useRef<OscillatorNode|null>(null),gain=useRef<GainNode|null>(null);
- const down=useRef<Record<Lever,boolean>>({dit:false,dah:false}),last=useRef<Lever>('dah'),timer=useRef<number|undefined>(undefined),running=useRef(false),sequence=useRef(''),letterTimer=useRef<number|undefined>(undefined),wpmRef=useRef(wpm),modeRef=useRef(mode),volumeRef=useRef(volume),toneRef=useRef(tone);
- useEffect(()=>{wpmRef.current=wpm;modeRef.current=mode;volumeRef.current=volume;toneRef.current=tone;gain.current?.gain.setTargetAtTime(volume,audio.current!.currentTime,.01);osc.current?.frequency.setTargetAtTime(tone,audio.current!.currentTime,.01)},[wpm,mode,volume,tone]);
+ const down=useRef<Record<Lever,boolean>>({dit:false,dah:false}),last=useRef<Lever>('dah'),timer=useRef<number|undefined>(undefined),running=useRef(false),sounding=useRef(false),pending=useRef<Record<Lever,boolean>>({dit:false,dah:false}),squeezed=useRef(false),extra=useRef<Lever|null>(null),sequence=useRef(''),letterTimer=useRef<number|undefined>(undefined),wpmRef=useRef(wpm),modeRef=useRef(mode),volumeRef=useRef(volume),toneRef=useRef(tone);
+ useEffect(()=>{wpmRef.current=wpm;modeRef.current=mode;volumeRef.current=volume;toneRef.current=tone;gain.current?.gain.setTargetAtTime(sounding.current?volume:0,audio.current!.currentTime,.01);osc.current?.frequency.setTargetAtTime(tone,audio.current!.currentTime,.01)},[wpm,mode,volume,tone]);
  function log(s:string){setEvents(p=>[new Date().toLocaleTimeString()+' '+s,...p].slice(0,40))}
  async function initAudio(){if(!audio.current){const ctx=new AudioContext();const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=toneRef.current;g.gain.value=0;o.connect(g).connect(ctx.destination);o.start();audio.current=ctx;osc.current=o;gain.current=g}await audio.current.resume()}
- function sidetone(on:boolean){const c=audio.current,g=gain.current;if(c&&g)g.gain.setTargetAtTime(on?volumeRef.current:0,c.currentTime,.003)}
+ function sidetone(on:boolean){sounding.current=on;const c=audio.current,g=gain.current;if(c&&g)g.gain.setTargetAtTime(on?volumeRef.current:0,c.currentTime,.003)}
  function flushLetter(){if(!sequence.current)return;const char=MORSE[sequence.current]||'?';setDecoded(p=>p+char);sequence.current=''}
- function next(){if(!down.current.dit&&!down.current.dah){running.current=false;sidetone(false);return}running.current=true;window.clearTimeout(letterTimer.current);const lever:Lever=down.current.dit&&down.current.dah?(last.current==='dit'?'dah':'dit'):(down.current.dit?'dit':'dah');last.current=lever;const dot=1200/wpmRef.current;const duration=lever==='dit'?dot:dot*3;sidetone(true);sequence.current+=lever==='dit'?'.':'-';timer.current=window.setTimeout(()=>{sidetone(false);letterTimer.current=window.setTimeout(flushLetter,dot*3);timer.current=window.setTimeout(next,dot)},duration)}
- function setLever(lever:Lever,pressed:boolean){if(down.current[lever]===pressed)return;down.current[lever]=pressed;setKeys({...down.current});log(lever.toUpperCase()+' '+(pressed?'DOWN':'UP'));if(pressed&&!running.current){void initAudio().then(next)}}
+ function next(){
+  const active=down.current;
+  const remembered=pending.current;
+  let lever:Lever|null=null;
+  if(extra.current){lever=extra.current;extra.current=null}
+  else if(active.dit&&active.dah)lever=last.current==='dit'?'dah':'dit';
+  else if(remembered.dit&&remembered.dah)lever=last.current==='dit'?'dah':'dit';
+  else if(remembered.dit||remembered.dah)lever=remembered.dit?'dit':'dah';
+  else if(active.dit||active.dah)lever=active.dit?'dit':'dah';
+  if(!lever){running.current=false;sidetone(false);return}
+  running.current=true;
+  window.clearTimeout(letterTimer.current);
+  pending.current[lever]=false;
+  last.current=lever;
+  const dot=1200/wpmRef.current;
+  const duration=lever==='dit'?dot:dot*3;
+  sidetone(true);
+  sequence.current+=lever==='dit'?'.':'-';
+  timer.current=window.setTimeout(()=>{
+   sidetone(false);
+   letterTimer.current=window.setTimeout(flushLetter,dot*3);
+   timer.current=window.setTimeout(next,dot);
+  },duration);
+ }
+ function setLever(lever:Lever,pressed:boolean){
+  if(down.current[lever]===pressed)return;
+  down.current[lever]=pressed;
+  setKeys({...down.current});
+  log(lever.toUpperCase()+' '+(pressed?'DOWN':'UP'));
+  if(pressed){
+   pending.current[lever]=true;
+   if(down.current.dit&&down.current.dah)squeezed.current=true;
+   if(!running.current){running.current=true;void initAudio().then(()=>{if(running.current)next()}).catch(()=>{running.current=false})}
+  }else if(!down.current.dit&&!down.current.dah){
+   if(squeezed.current&&modeRef.current==='B'&&running.current){
+    extra.current=last.current==='dit'?'dah':'dit';
+   }
+   squeezed.current=false;
+  }
+ }
  const leverRef=useRef(setLever);leverRef.current=setLever;
  useEffect(()=>{const pressed=new Map<string,Lever>();function kd(e:KeyboardEvent){if(learning){e.preventDefault();if(e.repeat)return;setMapping(prev=>({...prev,[learning]:e.code}));setLearning(null);log('Asignada '+learning.toUpperCase()+' a '+e.code);return}const k:Lever|undefined=e.code===mapping.dit?'dit':e.code===mapping.dah?'dah':undefined;if(k){e.preventDefault();if(!pressed.has(e.code)){pressed.set(e.code,k);leverRef.current(k,true)}}}function ku(e:KeyboardEvent){const k=pressed.get(e.code);if(k){e.preventDefault();pressed.delete(e.code);leverRef.current(k,false)}}function blur(){pressed.clear();leverRef.current('dit',false);leverRef.current('dah',false)}window.addEventListener('keydown',kd);window.addEventListener('keyup',ku);window.addEventListener('blur',blur);return()=>{blur();window.removeEventListener('keydown',kd);window.removeEventListener('keyup',ku);window.removeEventListener('blur',blur)}},[mapping,learning]);
  async function connectSerial(){try{const nav=navigator as Navigator&{serial?:{requestPort:()=>Promise<any>}};if(!nav.serial){setStatus('Web Serial no disponible');return}const port=await nav.serial.requestPort();const info=port.getInfo();setDeviceInfo('USB serie VID '+info.usbVendorId+' PID '+info.usbProductId);setStatus('Puerto seleccionado; protocolo pendiente de identificar');log('Puerto serie seleccionado. No se envían comandos ni se abre el puerto sin conocer el protocolo.')}catch(e){setStatus('Serie: '+String(e))}}
