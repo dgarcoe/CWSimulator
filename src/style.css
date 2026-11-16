@@ -175,3 +175,9 @@ footer{margin-top:20px;padding:13px 0}
 .progress-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .progress-actions button{padding:9px 12px;font-size:11px}
 @media(max-width:680px){.lesson-insights{grid-template-columns:1fr}.lesson-insights>div{gap:3px}}
+
+.qso-simulator{border-top:1px solid var(--line);margin-top:20px;padding-top:17px}
+.qso-simulator .row{align-items:center}
+.qso-log{max-height:260px;overflow:auto;background:var(--inset);border:1px solid var(--line);padding:10px;margin:12px 0;display:grid;gap:8px}
+.qso-log>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:10px;font:11px Consolas,monospace;line-height:1.5}
+.qso-log b{color:var(--accent)}.qso-log span{overflow-wrap:anywhere;color:var(--ink)}
