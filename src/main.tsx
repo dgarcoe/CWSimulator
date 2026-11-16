@@ -211,7 +211,7 @@ function App(){
       <span className="eyebrow">{trainingMode==='receive'?'RECEPCIÓN / 5 CARACTERES':'ENVÍO / 5 CARACTERES'}</span>
       <div className="exercise-target">{!target?'LISTO':trainingMode==='receive'?'♫  ♫  ♫':target}</div>
       <p className="muted">{!target?'Prepara tus auriculares y empieza una sesión.':trainingMode==='receive'?'Escucha el grupo completo y escribe lo que has reconocido.':'Transmite el grupo con tus paletas; luego comprueba el resultado.'}</p>
-      {target&&trainingMode==='receive'&&<input ref={kochAnswerRef} className="textinput answer" aria-label="Respuesta escuchada" autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} maxLength={10} placeholder="Escribe lo que escuchas"/>}
+      {target&&trainingMode==='receive'&&<input ref={kochAnswerRef} className="textinput answer" aria-label="Respuesta escuchada" onKeyDown={e=>{if(e.key==="Enter"&&!e.repeat){e.preventDefault();if(exerciseChecked)newExercise();else checkExercise()}}} autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} maxLength={10} placeholder="Escribe lo que escuchas · Enter para comprobar / continuar"/>}
       <div className="row"><button className="primary" onClick={newExercise}>{target?'Siguiente grupo':'Ejercicio libre'}</button>{target&&trainingMode==='receive'&&<button onClick={replayExercise}>Repetir sonido</button>}{target&&<button onClick={checkExercise} disabled={exerciseChecked}>Comprobar</button>}</div>
       {trainingResult&&<p className="result" role="status">{trainingResult}</p>}
      </div>}
