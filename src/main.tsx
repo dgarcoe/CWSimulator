@@ -10,9 +10,14 @@ function App(){
  const [page,setPage]=useState<'academy'|'radio'|'hardware'>('academy');
  const [wpm,setWpm]=useState(20),[tone,setTone]=useState(700),[volume,setVolume]=useState(.2),[mode,setMode]=useState<'A'|'B'>('B');
  const [status,setStatus]=useState('Sin conectar'),[events,setEvents]=useState<string[]>([]),[decoded,setDecoded]=useState(''),[keys,setKeys]=useState<Record<Lever,boolean>>({dit:false,dah:false});
- const [lesson,setLesson]=useState(2),[trainingMode,setTrainingMode]=useState<'receive'|'send'>('receive'),[trainingWpm,setTrainingWpm]=useState(20),[effectiveWpm,setEffectiveWpm]=useState(8),[target,setTarget]=useState(''),[answer,setAnswer]=useState(''),[trainingResult,setTrainingResult]=useState(''),[correct,setCorrect]=useState(0),[attempts,setAttempts]=useState(0);
- const [history,setHistory]=useState<{mode:string;lesson:number;score:number}[]>(()=>{try{return JSON.parse(localStorage.getItem('cw-academy-history')||'[]')}catch{return []}});
+ const [lesson,setLesson]=useState(()=>{try{return Math.max(2,Math.min(KOCH.length,Number(localStorage.getItem('cw-lesson'))||2))}catch{return 2}}),[trainingMode,setTrainingMode]=useState<'receive'|'send'>('receive'),[trainingWpm,setTrainingWpm]=useState(20),[effectiveWpm,setEffectiveWpm]=useState(8),[target,setTarget]=useState(''),[answer,setAnswer]=useState(''),[trainingResult,setTrainingResult]=useState(''),[correct,setCorrect]=useState(0),[attempts,setAttempts]=useState(0);
+ const [history,setHistory]=useState<{mode:string;lesson:number;score:number;target?:string;actual?:string;date?:string}[]>(()=>{try{return JSON.parse(localStorage.getItem('cw-academy-history')||'[]')}catch{return []}});
+ const [autoAdvance,setAutoAdvance]=useState(true);
+ const [exerciseChecked,setExerciseChecked]=useState(false);
+ useEffect(()=>{localStorage.setItem('cw-lesson',String(lesson))},[lesson]);
  useEffect(()=>{localStorage.setItem('cw-academy-history',JSON.stringify(history))},[history]);
+ const [weaknesses,setWeaknesses]=useState<Record<string,number>>(()=>{try{return JSON.parse(localStorage.getItem('cw-weaknesses')||'{}')}catch{return {}}});
+ useEffect(()=>{localStorage.setItem('cw-weaknesses',JSON.stringify(weaknesses))},[weaknesses]);
  const [rxMessage,setRxMessage]=useState('CQ CQ DE EA1TEST EA1TEST K'),[rxPlaying,setRxPlaying]=useState(false);
  const rxPlayback=useRef<Playback|null>(null),rxTimeout=useRef<number|undefined>(undefined);
  const [deviceInfo,setDeviceInfo]=useState(''),[qrn,setQrn]=useState(0),[qsb,setQsb]=useState(0);
@@ -29,18 +34,23 @@ function App(){
  function newExercise(){
   stopStation();
   const pool=KOCH.slice(0,lesson);
-  const sample=Array.from({length:5},()=>pool[Math.floor(Math.random()*pool.length)]).join('');
-  setTarget(sample);setAnswer('');setTrainingResult('');
+  const sample=Array.from({length:5},()=>{const weights=pool.split('').map(ch=>1+Math.min(6,weaknesses[ch]||0));const total=weights.reduce((a,b)=>a+b,0);let draw=Math.random()*total;return pool.split('').find((ch,i)=>(draw-=weights[i])<0)||pool[pool.length-1]}).join('');
+  setTarget(sample);setAnswer('');setTrainingResult('');setExerciseChecked(false);
   if(trainingMode==='send'){sequence.current='';setDecoded('');window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current)}
   else void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,sample,trainingWpm,toneRef.current,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)});
  }
  function replayExercise(){if(!target)return;stopStation();void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,target,trainingWpm,toneRef.current,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
  function checkExercise(){
+  if(!target||exerciseChecked)return;
   const actual=(trainingMode==='receive'?answer:decoded).replace(/\s/g,'').toUpperCase();
   const count=Array.from(target).filter((ch,i)=>ch===actual[i]).length;
   const score=Math.round(100*count/Math.max(target.length,actual.length));
-  setAttempts(p=>p+1);if(score===100)setCorrect(p=>p+1);
-  setHistory(p=>[...p,{mode:trainingMode,lesson,score}].slice(-100));
+  setAttempts(p=>p+1);if(score===100)setCorrect(p=>p+1);setExerciseChecked(true);
+  const updated=[...history,{mode:trainingMode,lesson,score,target,actual,date:new Date().toISOString()}].slice(-100);
+  setHistory(updated);
+  setWeaknesses(prev=>{const next={...prev};for(let i=0;i<target.length;i++){const ch=target[i];next[ch]=Math.max(0,(next[ch]||0)+(actual[i]===ch?-0.25:1))}return next});
+  const recent=updated.filter(h=>h.lesson===lesson&&h.mode===trainingMode).slice(-10);
+  if(autoAdvance&&recent.length===10&&recent.reduce((a,h)=>a+h.score,0)/10>=90&&lesson<KOCH.length){setLesson(p=>p+1);setTrainingResult('Lección superada. Nuevo carácter desbloqueado. '+score+'% · esperado: '+target+' · recibido: '+(actual||'—'));return}
   setTrainingResult(score+'% de coincidencia · esperado: '+target+' · recibido: '+(actual||'—'));
  }
  function scheduleSpacing(dot:number){
@@ -123,7 +133,7 @@ function App(){
       <div className="exercise-target">{!target?'LISTO':trainingMode==='receive'?'♫  ♫  ♫':target}</div>
       <p className="muted">{!target?'Prepara tus auriculares y empieza una sesión.':trainingMode==='receive'?'Escucha el grupo completo y escribe lo que has reconocido.':'Transmite el grupo con tus paletas; luego comprueba el resultado.'}</p>
       {target&&trainingMode==='receive'&&<input className="textinput answer" aria-label="Respuesta escuchada" autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} maxLength={10} placeholder="Escribe lo que escuchas"/>}
-      <div className="row"><button className="primary" onClick={newExercise}>{target?'Siguiente grupo':'Empezar ejercicio'}</button>{target&&trainingMode==='receive'&&<button onClick={replayExercise}>Repetir sonido</button>}{target&&<button onClick={checkExercise}>Comprobar</button>}</div>
+      <div className="row"><button className="primary" onClick={newExercise}>{target?'Siguiente grupo':'Empezar ejercicio'}</button>{target&&trainingMode==='receive'&&<button onClick={replayExercise}>Repetir sonido</button>}{target&&<button onClick={checkExercise} disabled={exerciseChecked}>Comprobar</button>}</div>
       {trainingResult&&<p className="result" role="status">{trainingResult}</p>}
      </div>
     </section>
@@ -132,9 +142,9 @@ function App(){
      <p className="character-set">CARACTERES ACTIVOS<br/><strong>{KOCH.slice(0,lesson).split('').join('  ')}</strong></p>
      <label>Velocidad del carácter <b>{trainingWpm} WPM</b><input type="range" min="15" max="35" value={trainingWpm} onChange={e=>setTrainingWpm(+e.target.value)}/></label>
      <label>Velocidad efectiva <b>{Math.min(effectiveWpm,trainingWpm)} WPM</b><input type="range" min="5" max={trainingWpm} value={Math.min(effectiveWpm,trainingWpm)} onChange={e=>setEffectiveWpm(+e.target.value)}/></label>
-     <p className="fineprint">Consejo: mantén 20 WPM de carácter y empieza con 8 WPM efectivos. Sube de lección tras alcanzar un 90% de precisión de forma consistente.</p>
+     <label className="checkbox-label"><input type="checkbox" checked={autoAdvance} onChange={e=>setAutoAdvance(e.target.checked)}/> Avanzar automáticamente tras 10 ejercicios con ≥90% de media</label><p className="fineprint">Consejo: mantén 20 WPM de carácter y empieza con 8 WPM efectivos. Sube de lección tras alcanzar un 90% de precisión de forma consistente.</p>
     </section>
-    <section className="panel full-width"><div className="panel-kicker">03 / TU PROGRESO</div><div className="stats"><div><strong>{history.length}</strong><span>Ejercicios registrados</span></div><div><strong>{history.length?Math.round(history.reduce((sum,h)=>sum+h.score,0)/history.length):'—'}{history.length?'%':''}</strong><span>Precisión media</span></div><div><strong>{history.slice(-10).length?Math.round(history.slice(-10).reduce((sum,h)=>sum+h.score,0)/history.slice(-10).length)+'%':'—'}</strong><span>Últimos diez</span></div></div><p className="fineprint">El historial de resultados se conserva en este navegador. El desbloqueo de lecciones sigue siendo manual.</p></section>
+    <section className="panel full-width"><div className="panel-kicker">03 / TU PROGRESO</div><div className="stats"><div><strong>{history.length}</strong><span>Ejercicios registrados</span></div><div><strong>{history.length?Math.round(history.reduce((sum,h)=>sum+h.score,0)/history.length):'—'}{history.length?'%':''}</strong><span>Precisión media</span></div><div><strong>{history.slice(-10).length?Math.round(history.slice(-10).reduce((sum,h)=>sum+h.score,0)/history.slice(-10).length)+'%':'—'}</strong><span>Últimos diez</span></div></div><p className="fineprint">Los caracteres con más errores aparecen con mayor frecuencia en nuevos ejercicios. El historial se conserva en este navegador. Puedes activar o desactivar el avance automático.</p></section>
    </div>}
    {page==='radio'&&<div className="content-grid">
     <section className="panel"><div className="panel-kicker">01 / TRANSCEPTOR</div><h2>Banco de radio</h2><div className="frequency"><span>VFO A · CW</span><strong>7.025.000 <small>Hz</small></strong><span>RX · {tone} Hz · {wpm} WPM</span></div>
