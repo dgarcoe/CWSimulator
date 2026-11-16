@@ -40,3 +40,15 @@
 .weak-track{height:9px;background:var(--inset);border:1px solid var(--line)}.weak-track>div{height:100%;background:var(--chart)}
 .empty-chart{padding:35px 10px;color:var(--muted);font-size:13px;line-height:1.5}
 @media(max-width:780px){.analytics{grid-template-columns:1fr;gap:22px}}
+
+.guided-session{border-top:1px solid var(--line);padding-top:23px;margin-top:24px}
+.guided-session label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:15px 0}
+.guided-session select{width:auto;min-width:90px;margin:0}
+.guided-session p{color:var(--muted);font-size:13px;line-height:1.6}
+.mode-switch{flex-wrap:wrap}.mode-switch button{min-width:125px}
+.exercise textarea.textinput{resize:vertical;line-height:1.7;letter-spacing:1px}
+.confusions{border-top:1px solid var(--line);margin-top:25px;padding-top:20px}
+.confusions h3{font-size:15px;margin:0 0 14px}
+.confusion-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px}
+.confusion-list>div{display:flex;justify-content:space-between;gap:8px;padding:12px;background:var(--inset);font-size:13px}
+.confusion-list span{color:var(--muted);font-size:11px}
