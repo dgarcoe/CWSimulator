@@ -39,3 +39,19 @@ Browser hardware APIs require user permission, supported browsers and secure con
 5. Add optional free-form AI operator and contests.
 
 No RF transmission is performed.
+
+
+## Hardware-independent input architecture (design requirement)
+
+CWSimulator MUST NOT hardcode vendor IDs, product IDs, key mappings or serial protocols in the CW engine.
+
+- `InputAdapter` interface emits normalized `dit-down`, `dit-up`, `dah-down`, `dah-up` events with monotonic timestamps.
+- Pluggable adapters: configurable keyboard event mapping, WebHID report/bit mapping, Web Serial protocol parsers, and optional WinKeyer protocol adapter.
+- Device profiles store transport, mapping, polarity, paddle swap, iambic mode, timing, and optional VID/PID for identification (not a requirement to connect).
+- Profile management: create, rename, import/export JSON, persist in localStorage or IndexedDB; do not persist device permissions as though they were guaranteed.
+- Calibration wizard: press each lever and capture reports; for arbitrary HID/serial protocols, manual mapping or protocol-specific plugins may still be required.
+- All adapters feed the same keyer and decoder; audio and QSO logic never import a specific device driver.
+- Browser limitations: HID and Serial require permission and browser support; Linux device access may need OS permissions. A local bridge is a fallback for unsupported devices.
+- Hardware timestamps and keyer buffering should be used where available to minimize browser scheduling jitter.
+
+This is a design requirement, **not yet implemented** in v0.1. The current keyboard mapping remains hardcoded and USB selection is identification-only.
