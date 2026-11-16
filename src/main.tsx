@@ -178,9 +178,9 @@ function App(){
    <div className="identity"><div className="mark">CW</div><div><strong>CW / LAB</strong><small>RECEPCIÓN · TRANSMISIÓN</small></div></div>
    <p className="nav-caption">ESTACIÓN DE APRENDIZAJE</p>
    <nav aria-label="Navegación principal">
-    <button className={page==='academy'?'nav-item selected':'nav-item'} onClick={()=>setPage('academy')}><span>01</span> Academia</button>
-    <button className={page==='radio'?'nav-item selected':'nav-item'} onClick={()=>setPage('radio')}><span>02</span> Estación</button>
-    <button className={page==='hardware'?'nav-item selected':'nav-item'} onClick={()=>setPage('hardware')}><span>03</span> Manipulador</button>
+    <button className={page==='academy'?'nav-item selected':'nav-item'} onClick={()=>setPage('academy')}><span className="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18h18M5 15l4-9 4 9M6.5 12h5M16 7h5M18.5 4.5v5"/></svg></span> Academia</button>
+    <button className={page==='radio'?'nav-item selected':'nav-item'} onClick={()=>setPage('radio')}><span className="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19v-8m-5 8h10M12 11l-4-4m4 4 4-4M4.5 4.5a11 11 0 0 0 0 13m15-13a11 11 0 0 1 0 13M7.5 7.5a6 6 0 0 0 0 7m9-7a6 6 0 0 1 0 7"/></svg></span> Estación</button>
+    <button className={page==='hardware'?'nav-item selected':'nav-item'} onClick={()=>setPage('hardware')}><span className="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="15" width="18" height="5" rx="1"/><path d="M7 15V9l4-4h3m0 0v5m-3-5h6M6 12h5m6 0h2"/></svg></span> Manipulador</button>
    </nav>
    <div className="sidebar-bottom"><div className="live-dot"/> OPERACIÓN LOCAL <p>Una estación para aprender a escuchar antes de contar.</p></div>
   </aside>
