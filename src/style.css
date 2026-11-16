@@ -196,3 +196,22 @@ footer{margin-top:20px;padding:13px 0}
 .guide-practice label{flex:1 1 240px;font-size:11px}
 .guide-practice button{font-size:11px}
 @media(max-width:680px){.guide-entries{grid-template-columns:1fr}.guide-entries article{flex-wrap:wrap}}
+
+.operating-practice{margin-top:4px}
+.operating-head{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px;margin:16px 0}
+.operating-head label{font-size:11px;display:grid;gap:6px}
+.operating-head select{padding:8px;background:var(--inset);color:var(--ink);border:1px solid var(--line)}
+.operating-head span{font:11px Consolas,monospace;color:var(--muted)}
+.operating-question{padding:17px;border:1px solid var(--line);background:var(--inset);display:grid;gap:13px}
+.operating-question>small{font:10px Consolas,monospace;color:var(--accent);letter-spacing:.5px}
+.operating-question h3{font-size:15px;margin:0}
+.operating-question label{display:grid;gap:7px;font-size:11px}
+.operating-question .row{align-items:center;flex-wrap:wrap}
+.operating-question details{font-size:11px;color:var(--muted)}
+.operating-question summary{cursor:pointer}
+.operating-feedback{border-left:3px solid var(--chart);padding:10px 12px;background:var(--panel)}
+.operating-feedback p{font-size:11px;margin:7px 0}
+.operating-feedback button{margin-top:8px}
+.morse-decoder{border-top:1px solid var(--line);margin-top:16px;padding-top:13px}
+.morse-decoder h3{font-size:13px}
+.morse-decoder .decoded{margin-top:8px;min-height:38px}
