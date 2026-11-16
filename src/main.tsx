@@ -7,15 +7,17 @@ type Lever = 'dit'|'dah';
 const KOCH='KMRSUAPTLOWI.NJEF0YVG5/Q9ZH38B?427C1D6X'.replace(/[^A-Z0-9]/g,'');
 const MORSE: Record<string,string> = {'.-':'A','-...':'B','-.-.':'C','-..':'D','.':'E','..-.':'F','--.':'G','....':'H','..':'I','.---':'J','-.-':'K','.-..':'L','--':'M','-.':'N','---':'O','.--.':'P','--.-':'Q','.-.':'R','...':'S','-':'T','..-':'U','...-':'V','.--':'W','-..-':'X','-.--':'Y','--..':'Z','-----':'0','.----':'1','..---':'2','...--':'3','....-':'4','.....':'5','-....':'6','--...':'7','---..':'8','----.':'9'};
 function App(){
- const [palette,setPalette]=useState<'paper'|'slate'|'sand'>(()=>{const v=localStorage.getItem('cw-palette');return v==='slate'||v==='sand'?v:'paper'});
+ const [palette,setPalette]=useState<'paper'|'slate'|'sand'>(()=>{const v=localStorage.getItem('cw-palette');return v==='paper'||v==='sand'?v:'slate'});
  const [trainingTone,setTrainingTone]=useState(()=>Number(localStorage.getItem('cw-training-tone'))||600);
  useEffect(()=>{localStorage.setItem('cw-palette',palette)},[palette]);
  useEffect(()=>{localStorage.setItem('cw-training-tone',String(trainingTone))},[trainingTone]);
+ const [keyboardText,setKeyboardText]=useState('CQ CQ DE TEST K');
+ const [sessionSize,setSessionSize]=useState(10),[sessionRemaining,setSessionRemaining]=useState(0),[sessionScores,setSessionScores]=useState<number[]>([]);
  const [rawSymbols,setRawSymbols]=useState('');
  const [page,setPage]=useState<'academy'|'radio'|'hardware'>('academy');
  const [wpm,setWpm]=useState(20),[tone,setTone]=useState(700),[volume,setVolume]=useState(.2),[mode,setMode]=useState<'A'|'B'>('B');
  const [status,setStatus]=useState('Sin conectar'),[events,setEvents]=useState<string[]>([]),[decoded,setDecoded]=useState(''),[keys,setKeys]=useState<Record<Lever,boolean>>({dit:false,dah:false});
- const [lesson,setLesson]=useState(()=>{try{return Math.max(2,Math.min(KOCH.length,Number(localStorage.getItem('cw-lesson'))||2))}catch{return 2}}),[trainingMode,setTrainingMode]=useState<'receive'|'send'>('receive'),[trainingWpm,setTrainingWpm]=useState(20),[effectiveWpm,setEffectiveWpm]=useState(8),[target,setTarget]=useState(''),[answer,setAnswer]=useState(''),[trainingResult,setTrainingResult]=useState(''),[correct,setCorrect]=useState(0),[attempts,setAttempts]=useState(0);
+ const [lesson,setLesson]=useState(()=>{try{return Math.max(2,Math.min(KOCH.length,Number(localStorage.getItem('cw-lesson'))||2))}catch{return 2}}),[trainingMode,setTrainingMode]=useState<'receive'|'send'|'keyboard'>('receive'),[trainingWpm,setTrainingWpm]=useState(20),[effectiveWpm,setEffectiveWpm]=useState(8),[target,setTarget]=useState(''),[answer,setAnswer]=useState(''),[trainingResult,setTrainingResult]=useState(''),[correct,setCorrect]=useState(0),[attempts,setAttempts]=useState(0);
  const [history,setHistory]=useState<{mode:string;lesson:number;score:number;target?:string;actual?:string;date?:string}[]>(()=>{try{return JSON.parse(localStorage.getItem('cw-academy-history')||'[]')}catch{return []}});
  const [autoAdvance,setAutoAdvance]=useState(true);
  const [exerciseChecked,setExerciseChecked]=useState(false);
@@ -53,11 +55,17 @@ function App(){
   setAttempts(p=>p+1);if(score===100)setCorrect(p=>p+1);setExerciseChecked(true);
   const updated=[...history,{mode:trainingMode,lesson,score,target,actual,date:new Date().toISOString()}].slice(-100);
   setHistory(updated);
+  if(sessionRemaining>0){setSessionScores(p=>[...p,score]);setSessionRemaining(p=>p-1)}
   setWeaknesses(prev=>{const next={...prev};for(let i=0;i<target.length;i++){const ch=target[i];next[ch]=Math.max(0,(next[ch]||0)+(actual[i]===ch?-0.25:1))}return next});
   const recent=updated.filter(h=>h.lesson===lesson&&h.mode===trainingMode).slice(-10);
   if(autoAdvance&&recent.length===10&&recent.reduce((a,h)=>a+h.score,0)/10>=90&&lesson<KOCH.length){setLesson(p=>p+1);setTrainingResult('Lección superada. Nuevo carácter desbloqueado. '+score+'% · esperado: '+target+' · recibido: '+(actual||'—'));return}
   setTrainingResult(score+'% de coincidencia · esperado: '+target+' · recibido: '+(actual||'—'));
  }
+ function startSession(){setSessionScores([]);setSessionRemaining(sessionSize);newExercise()}
+ function playKeyboard(){stopStation();void initAudio().then(()=>{const message=keyboardText.toUpperCase().replace(/[^A-Z0-9 ]/g,'').slice(0,120);if(!message)return;rxPlayback.current=playCw(audio.current!,message,trainingWpm,trainingTone,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>{setRxPlaying(false);rxPlayback.current=null},(rxPlayback.current.duration+.15)*1000)})}
+ const confusions:Record<string,number>={};
+ for(const h of history){if(!h.target||h.actual===undefined)continue;for(let i=0;i<h.target.length;i++){const expected=h.target[i],got=h.actual[i]||'∅';if(expected!==got){const key=expected+' → '+got;confusions[key]=(confusions[key]||0)+1}}}
+ const topConfusions=Object.entries(confusions).sort((a,b)=>b[1]-a[1]).slice(0,8);
  function scheduleSpacing(dot:number){
   window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current);
   letterTimer.current=window.setTimeout(flushLetter,dot*3);
@@ -135,15 +143,16 @@ function App(){
    {page==='academy'&&<div className="content-grid">
     <section className="panel hero-panel">
      <div className="panel-kicker">01 / ENTRENAMIENTO</div><h2>Aprender escuchando</h2><p className="muted">Koch + Farnsworth. Cada carácter conserva su sonido natural, con pausas más largas al principio.</p>
-     <div className="mode-switch"><button className={trainingMode==='receive'?'chosen':''} onClick={()=>{stopStation();setTrainingMode('receive');setTarget('');setTrainingResult('')}}>◉ Escucha</button><button className={trainingMode==='send'?'chosen':''} onClick={()=>{stopStation();setTrainingMode('send');setTarget('');setTrainingResult('')}}>⌁ Transmisión</button></div>
-     <div className="exercise">
+     <div className="mode-switch"><button className={trainingMode==='receive'?'chosen':''} onClick={()=>{stopStation();setTrainingMode('receive');setTarget('');setTrainingResult('');setSessionRemaining(0)}}>◉ Escucha</button><button className={trainingMode==='send'?'chosen':''} onClick={()=>{stopStation();setTrainingMode('send');setTarget('');setTrainingResult('');setSessionRemaining(0)}}>⌁ Transmisión</button><button className={trainingMode==='keyboard'?'chosen':''} onClick={()=>{stopStation();setTrainingMode('keyboard');setTarget('');setTrainingResult('');setSessionRemaining(0)}}>Teclado CW</button></div>
+     {trainingMode==='keyboard'?<div className="exercise"><span className="eyebrow">CW KEYBOARD / TEXTO A SONIDO</span><h3>Escribe y escucha</h3><p className="muted">Convierte lo que escribes en CW, manteniendo la velocidad y el tono de la Academia. Útil para escuchar indicativos y palabras completas.</p><textarea className="textinput" rows={3} maxLength={120} value={keyboardText} onChange={e=>setKeyboardText(e.target.value.toUpperCase())} aria-label="Texto a transmitir en CW"/><div className="row"><button className="primary" onClick={playKeyboard}>Reproducir CW</button><button disabled={!rxPlaying} onClick={stopStation}>Detener</button></div></div>:<div className="exercise">
       <span className="eyebrow">{trainingMode==='receive'?'RECEPCIÓN / 5 CARACTERES':'ENVÍO / 5 CARACTERES'}</span>
       <div className="exercise-target">{!target?'LISTO':trainingMode==='receive'?'♫  ♫  ♫':target}</div>
       <p className="muted">{!target?'Prepara tus auriculares y empieza una sesión.':trainingMode==='receive'?'Escucha el grupo completo y escribe lo que has reconocido.':'Transmite el grupo con tus paletas; luego comprueba el resultado.'}</p>
       {target&&trainingMode==='receive'&&<input className="textinput answer" aria-label="Respuesta escuchada" autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} maxLength={10} placeholder="Escribe lo que escuchas"/>}
-      <div className="row"><button className="primary" onClick={newExercise}>{target?'Siguiente grupo':'Empezar ejercicio'}</button>{target&&trainingMode==='receive'&&<button onClick={replayExercise}>Repetir sonido</button>}{target&&<button onClick={checkExercise} disabled={exerciseChecked}>Comprobar</button>}</div>
+      <div className="row"><button className="primary" onClick={newExercise}>{target?'Siguiente grupo':'Ejercicio libre'}</button>{target&&trainingMode==='receive'&&<button onClick={replayExercise}>Repetir sonido</button>}{target&&<button onClick={checkExercise} disabled={exerciseChecked}>Comprobar</button>}</div>
       {trainingResult&&<p className="result" role="status">{trainingResult}</p>}
-     </div>
+     </div>}
+     {trainingMode!=='keyboard'&&<div className="guided-session"><div className="panel-kicker">SESIÓN GUIADA</div><label>Ejercicios por sesión <select value={sessionSize} onChange={e=>setSessionSize(+e.target.value)}><option value={5}>5</option><option value={10}>10</option><option value={20}>20</option></select></label><div className="row"><button onClick={startSession}>Iniciar sesión</button>{sessionRemaining>0&&<button onClick={()=>setSessionRemaining(0)}>Terminar sesión</button>}</div>{sessionRemaining>0&&<p role="status">Quedan {sessionRemaining} ejercicios. Después de comprobar cada respuesta, pulsa «Siguiente grupo».</p>}{sessionScores.length>0&&<p>Sesión: {sessionScores.length} completados · {Math.round(sessionScores.reduce((a,b)=>a+b,0)/sessionScores.length)}% de precisión media{sessionRemaining===0?' · Finalizada':''}</p>}</div>}
     </section>
     <section className="panel settings-panel"><div className="panel-kicker">02 / AJUSTES DE LA SESIÓN</div><h2>Tu ritmo</h2>
      <label>Lección Koch <b>{lesson} / {KOCH.length}</b><input type="range" min="2" max={KOCH.length} value={lesson} onChange={e=>setLesson(+e.target.value)}/></label>
@@ -165,7 +174,7 @@ function App(){
        {weakTop.length&&weakTop.some(([,v])=>v>0)?<div className="weak-chart">{weakTop.map(([ch,value])=><div className="weak-row" key={ch}><span>{ch}</span><div className="weak-track"><div style={{width:Math.max(2,value/Math.max(1,...weakTop.map(([,n])=>n))*100)+'%'}}/></div><small>{value.toFixed(1)}</small></div>)}</div>:<p className="empty-chart">Los caracteres difíciles aparecerán aquí conforme practiques.</p>}
       </div>
      </div>
-     <p className="fineprint">Los caracteres con más errores aparecen con mayor frecuencia en nuevos ejercicios. El historial se conserva en este navegador. Puedes activar o desactivar el avance automático.</p></section>
+     <div className="confusions"><h3>Confusiones frecuentes</h3>{topConfusions.length?<div className="confusion-list">{topConfusions.map(([pair,n])=><div key={pair}><strong>{pair}</strong><span>{n} {n===1?'vez':'veces'}</span></div>)}</div>:<p className="fineprint">Cuando cometas errores, verás qué caracteres estás confundiendo y con qué frecuencia.</p>}</div><p className="fineprint">Los caracteres con más errores aparecen con mayor frecuencia en nuevos ejercicios. El historial se conserva en este navegador. Puedes activar o desactivar el avance automático.</p></section>
    </div>}
    {page==='radio'&&<div className="content-grid">
     <section className="panel"><div className="panel-kicker">01 / TRANSCEPTOR</div><h2>Banco de radio</h2><div className="frequency"><span>VFO A · CW</span><strong>7.025.000 <small>Hz</small></strong><span>RX · {tone} Hz · {wpm} WPM</span></div>
