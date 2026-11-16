@@ -12,7 +12,10 @@ function App(){
  useEffect(()=>{localStorage.setItem('cw-palette',palette)},[palette]);
  useEffect(()=>{localStorage.setItem('cw-training-tone',String(trainingTone))},[trainingTone]);
  const [machineActive,setMachineActive]=useState(false),[machineAttempts,setMachineAttempts]=useState(0),[machineHits,setMachineHits]=useState(0),[machineFeedback,setMachineFeedback]=useState('');
- const machineRef=useRef({active:false,char:'',busy:false});
+ const machineRef=useRef({active:false,char:'',busy:false,started:0,token:0});
+ const [machineLog,setMachineLog]=useState<{expected:string;actual:string;correct:boolean;ms:number;date:string}[]>(()=>{try{return JSON.parse(localStorage.getItem('cw-machine-log')||'[]')}catch{return []}});
+ useEffect(()=>{localStorage.setItem('cw-machine-log',JSON.stringify(machineLog.slice(-500)))},[machineLog]);
+ const machineDelay=useRef<number|undefined>(undefined);
  const [sessionSize,setSessionSize]=useState(10),[sessionRemaining,setSessionRemaining]=useState(0),[sessionScores,setSessionScores]=useState<number[]>([]);
  const [rawSymbols,setRawSymbols]=useState('');
  const [page,setPage]=useState<'academy'|'radio'|'hardware'>('academy');
@@ -64,17 +67,44 @@ function App(){
  }
  function startSession(){setSessionScores([]);setSessionRemaining(sessionSize);newExercise()}
  function chooseMachineChar(){const pool=KOCH.slice(0,lesson);const weights=pool.split('').map(ch=>1+Math.min(8,weaknesses[ch]||0));let draw=Math.random()*weights.reduce((a,b)=>a+b,0);return pool.split('').find((ch,i)=>(draw-=weights[i])<0)||pool[pool.length-1]}
- async function soundMachine(ch:string){stopStation();await initAudio();rxPlayback.current=playCw(audio.current!,ch,trainingWpm,trainingTone,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>{setRxPlaying(false);rxPlayback.current=null},(rxPlayback.current!.duration+.15)*1000)}
- function startMachine(){const ch=chooseMachineChar();machineRef.current={active:true,char:ch,busy:false};setMachineActive(true);setMachineAttempts(0);setMachineHits(0);setMachineFeedback('Escucha y pulsa el carácter correspondiente.');void soundMachine(ch)}
- function stopMachine(){machineRef.current.active=false;setMachineActive(false);stopStation()}
+ async function soundMachine(ch:string){
+  stopStation();await initAudio();if(!machineRef.current.active||machineRef.current.char!==ch)return;
+  rxPlayback.current=playCw(audio.current!,ch,trainingWpm,trainingTone,volumeRef.current,effectiveWpm);
+  setRxPlaying(true);const duration=rxPlayback.current.duration;
+  rxTimeout.current=window.setTimeout(()=>{setRxPlaying(false);rxPlayback.current=null},(duration+.15)*1000);
+ }
+ function startMachine(){
+  window.clearTimeout(machineDelay.current);
+  const ch=chooseMachineChar();machineRef.current={active:true,char:ch,busy:false,started:performance.now(),token:machineRef.current.token+1};
+  setMachineActive(true);setMachineAttempts(0);setMachineHits(0);setMachineFeedback('Escucha el carácter y responde con el teclado.');void soundMachine(ch)
+ }
+ function stopMachine(){window.clearTimeout(machineDelay.current);machineRef.current.active=false;machineRef.current.token++;setMachineActive(false);stopStation()}
  function answerMachine(value:string){
   const current=machineRef.current;if(!current.active||current.busy)return;
   const ch=value.toUpperCase();if(!/^[A-Z0-9]$/.test(ch))return;
-  const correctAnswer=ch===current.char;setMachineAttempts(p=>p+1);
-  if(correctAnswer){setMachineHits(p=>p+1);setMachineFeedback('Correcto · '+current.char);setWeaknesses(p=>({...p,[current.char]:Math.max(0,(p[current.char]||0)-.3)}));current.busy=true;
-   window.setTimeout(()=>{if(!machineRef.current.active)return;const nextChar=chooseMachineChar();machineRef.current.char=nextChar;machineRef.current.busy=false;setMachineFeedback('Escucha el siguiente carácter.');void soundMachine(nextChar)},450);
-  }else{setMachineFeedback(ch+' no es correcto. Vuelve a escuchar.');setWeaknesses(p=>({...p,[current.char]:(p[current.char]||0)+1}));void soundMachine(current.char)}
+  const correctAnswer=ch===current.char;const elapsed=Math.round(performance.now()-current.started);
+  setMachineLog(p=>[...p,{expected:current.char,actual:ch,correct:correctAnswer,ms:elapsed,date:new Date().toISOString()}].slice(-500));
+  setMachineAttempts(p=>p+1);
+  if(correctAnswer){
+   setMachineHits(p=>p+1);setMachineFeedback('Correcto · '+current.char);
+   setWeaknesses(p=>({...p,[current.char]:Math.max(0,(p[current.char]||0)-.3)}));current.busy=true;
+   const token=current.token;
+   machineDelay.current=window.setTimeout(()=>{
+    if(!machineRef.current.active||machineRef.current.token!==token)return;
+    const nextChar=chooseMachineChar();machineRef.current.char=nextChar;machineRef.current.busy=false;machineRef.current.started=performance.now();
+    setMachineFeedback('Escucha el siguiente carácter.');void soundMachine(nextChar)
+   },500);
+  }else{
+   setMachineFeedback(ch+' no es correcto. Vuelve a escuchar.');
+   setWeaknesses(p=>({...p,[current.char]:(p[current.char]||0)+1}));
+   current.started=performance.now();void soundMachine(current.char)
+  }
  }
+ const machineRecent=machineLog.slice(-80);
+ const machineAccuracy=machineRecent.length?Math.round(100*machineRecent.filter(x=>x.correct).length/machineRecent.length):0;
+ const machineTimes=machineRecent.filter(x=>x.correct).map(x=>x.ms);
+ const machineAvg=machineTimes.length?Math.round(machineTimes.reduce((a,b)=>a+b,0)/machineTimes.length):0;
+ const machineByChar=KOCH.slice(0,lesson).split('').map(ch=>{const entries=machineLog.filter(x=>x.expected===ch);return {ch,total:entries.length,accuracy:entries.length?Math.round(100*entries.filter(x=>x.correct).length/entries.length):0,avg:entries.filter(x=>x.correct).length?Math.round(entries.filter(x=>x.correct).reduce((sum,x)=>sum+x.ms,0)/entries.filter(x=>x.correct).length):0}}).filter(x=>x.total).sort((a,b)=>a.accuracy-b.accuracy||b.avg-a.avg);
  const confusions:Record<string,number>={};
  for(const h of history){if(!h.target||h.actual===undefined)continue;for(let i=0;i<h.target.length;i++){const expected=h.target[i],got=h.actual[i]||'∅';if(expected!==got){const key=expected+' → '+got;confusions[key]=(confusions[key]||0)+1}}}
  const topConfusions=Object.entries(confusions).sort((a,b)=>b[1]-a[1]).slice(0,8);
@@ -133,7 +163,7 @@ function App(){
  }
  const machineAnswerRef=useRef(answerMachine);machineAnswerRef.current=answerMachine;
  const leverRef=useRef(setLever);leverRef.current=setLever;
- useEffect(()=>{const pressed=new Map<string,Lever>();function kd(e:KeyboardEvent){if(machineRef.current.active&&!e.repeat&&/^[a-z0-9]$/i.test(e.key)&&!(e.target instanceof HTMLInputElement)&&!(e.target instanceof HTMLTextAreaElement)){e.preventDefault();machineAnswerRef.current(e.key);return}if(learning){e.preventDefault();if(e.repeat)return;setMapping(prev=>({...prev,[learning]:e.code}));setLearning(null);log('Asignada '+learning.toUpperCase()+' a '+e.code);return}const k:Lever|undefined=e.code===mapping.dit?'dit':e.code===mapping.dah?'dah':undefined;if(k){e.preventDefault();if(!pressed.has(e.code)){pressed.set(e.code,k);leverRef.current(k,true)}}}function ku(e:KeyboardEvent){const k=pressed.get(e.code);if(k){e.preventDefault();pressed.delete(e.code);leverRef.current(k,false)}}function blur(){pressed.clear();leverRef.current('dit',false);leverRef.current('dah',false)}window.addEventListener('keydown',kd);window.addEventListener('keyup',ku);window.addEventListener('blur',blur);return()=>{blur();window.removeEventListener('keydown',kd);window.removeEventListener('keyup',ku);window.removeEventListener('blur',blur)}},[mapping,learning]);
+ useEffect(()=>{const pressed=new Map<string,Lever>();function kd(e:KeyboardEvent){if(machineRef.current.active&&!e.repeat&&/^[a-z0-9]$/i.test(e.key)&&!(e.target instanceof HTMLTextAreaElement)){e.preventDefault();machineAnswerRef.current(e.key);return}if(learning){e.preventDefault();if(e.repeat)return;setMapping(prev=>({...prev,[learning]:e.code}));setLearning(null);log('Asignada '+learning.toUpperCase()+' a '+e.code);return}const k:Lever|undefined=e.code===mapping.dit?'dit':e.code===mapping.dah?'dah':undefined;if(k){e.preventDefault();if(!pressed.has(e.code)){pressed.set(e.code,k);leverRef.current(k,true)}}}function ku(e:KeyboardEvent){const k=pressed.get(e.code);if(k){e.preventDefault();pressed.delete(e.code);leverRef.current(k,false)}}function blur(){pressed.clear();leverRef.current('dit',false);leverRef.current('dah',false)}window.addEventListener('keydown',kd);window.addEventListener('keyup',ku);window.addEventListener('blur',blur);return()=>{blur();window.removeEventListener('keydown',kd);window.removeEventListener('keyup',ku);window.removeEventListener('blur',blur)}},[mapping,learning]);
  async function connectSerial(){try{const nav=navigator as Navigator&{serial?:{requestPort:()=>Promise<any>}};if(!nav.serial){setStatus('Web Serial no disponible');return}const port=await nav.serial.requestPort();const info=port.getInfo();setDeviceInfo('USB serie VID '+info.usbVendorId+' PID '+info.usbProductId);setStatus('Puerto seleccionado; protocolo pendiente de identificar');log('Puerto serie seleccionado. No se envían comandos ni se abre el puerto sin conocer el protocolo.')}catch(e){setStatus('Serie: '+String(e))}}
  async function connectHid(){try{const nav=navigator as Navigator&{hid?:{requestDevice:(o:{filters:object[]})=>Promise<any[]>}};if(!nav.hid){setStatus('WebHID no disponible');return}const devices=await nav.hid.requestDevice({filters:[]});if(!devices.length)return;const d=devices[0];setDeviceInfo(d.productName+' VID '+d.vendorId+' PID '+d.productId);setStatus('HID identificado; falta asignar bits de las levas');log('HID seleccionado: '+d.productName)}catch(e){setStatus('HID: '+String(e))}}
  useEffect(()=>()=>{window.clearTimeout(timer.current);window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current);window.clearTimeout(rxTimeout.current);rxPlayback.current?.stop();void audio.current?.close()},[]);
@@ -157,7 +187,20 @@ function App(){
     <section className="panel hero-panel">
      <div className="panel-kicker">01 / ENTRENAMIENTO</div><h2>Aprender escuchando</h2><p className="muted">Koch + Farnsworth. Cada carácter conserva su sonido natural, con pausas más largas al principio.</p>
      <div className="mode-switch"><button className={trainingMode==='receive'?'chosen':''} onClick={()=>{stopStation();stopMachine();setTrainingMode('receive');setTarget('');setTrainingResult('');setSessionRemaining(0)}}>◉ Escucha</button><button className={trainingMode==='send'?'chosen':''} onClick={()=>{stopStation();stopMachine();setTrainingMode('send');setTarget('');setTrainingResult('');setSessionRemaining(0)}}>⌁ Transmisión</button><button className={trainingMode==='machine'?'chosen':''} onClick={()=>{stopStation();setTrainingMode('machine');setTarget('');setTrainingResult('');setSessionRemaining(0)}}>MorseMachine</button></div>
-     {trainingMode==='machine'?<div className="exercise"><span className="eyebrow">MORSEMACHINE / RECONOCIMIENTO INMEDIATO</span><h3>Un sonido. Una respuesta.</h3><p className="muted">Escucha un carácter y pulsa su letra o número. Si fallas, se repite; si aciertas, avanzas. Los caracteres difíciles aparecen más a menudo.</p><div className="machine-status">{machineActive?'● EN CURSO':'PREPARADO'}</div><div className="row"><button className="primary" disabled={machineActive} onClick={startMachine}>Iniciar</button><button disabled={!machineActive} onClick={()=>void soundMachine(machineRef.current.char)}>Repetir sonido</button><button disabled={!machineActive} onClick={stopMachine}>Terminar</button></div>{machineActive&&<><p className="machine-feedback" role="status">{machineFeedback}</p><input className="textinput" aria-label="Respuesta MorseMachine" placeholder="Pulsa la letra o número escuchado" value="" onChange={e=>answerMachine(e.target.value.slice(-1))}/></>}<p className="machine-score">Aciertos: {machineHits} / {machineAttempts} · {machineAttempts?Math.round(100*machineHits/machineAttempts):0}%</p></div>:<div className="exercise">
+     {trainingMode==='machine'?<div className="machine-console">
+      <div className="machine-stage">
+       <div className="machine-head"><span>MORSE MACHINE / RX TRAINER</span><span>{trainingWpm} WPM · {trainingTone} Hz</span></div>
+       <div className="machine-display" aria-live="off"><div className="machine-signal">{machineActive?'◉':'○'}</div><strong>{machineActive?'ESCUCHA':'EN ESPERA'}</strong><span>{machineActive?'Pulsa la letra o el número que escuchas':'Inicia una sesión para practicar reconocimiento inmediato'}</span></div>
+       <div className="machine-controls"><button className="primary" disabled={machineActive} onClick={startMachine}>Iniciar entrenamiento</button><button disabled={!machineActive} onClick={()=>void soundMachine(machineRef.current.char)}>Repetir</button><button disabled={!machineActive} onClick={stopMachine}>Detener</button></div>
+       {machineActive&&<input className="machine-answer textinput" autoFocus aria-label="Respuesta MorseMachine" placeholder="Respuesta: A–Z / 0–9" value="" onChange={e=>answerMachine(e.target.value.slice(-1))}/>}
+       <p className="machine-feedback" role="status">{machineFeedback||'No se muestran puntos ni rayas. Aprende el sonido completo.'}</p>
+      </div>
+      <div className="machine-instruments">
+       <div className="machine-readouts"><div><small>SESIÓN · ACIERTOS</small><strong>{machineHits}<em>/{machineAttempts}</em></strong></div><div><small>PRECISIÓN · ÚLTIMOS 80</small><strong>{machineRecent.length?machineAccuracy+'%':'—'}</strong></div><div><small>REACCIÓN MEDIA · ACIERTOS</small><strong>{machineAvg? (machineAvg/1000).toFixed(2)+' s':'—'}</strong></div></div>
+       <div className="machine-plot"><div className="machine-section-label">REGISTRO DE RESPUESTAS <span>ÚLTIMAS 40</span></div><div className="machine-strip">{machineLog.slice(-40).map((entry,i)=><div key={i} className={entry.correct?'hit':'miss'} title={entry.expected+' → '+entry.actual+' · '+(entry.ms/1000).toFixed(2)+' s'}/>)}</div></div>
+       <div className="machine-plot"><div className="machine-section-label">PRECISIÓN POR CARÁCTER <span>{machineByChar.length} ACTIVOS CON DATOS</span></div>{machineByChar.length?<div className="machine-bars">{machineByChar.map(x=><div key={x.ch} className="machine-bar"><b>{x.ch}</b><div className="machine-track"><i style={{width:x.accuracy+'%'}}/></div><span>{x.accuracy}%</span><small>{x.total} int. · {x.avg?(x.avg/1000).toFixed(1)+' s':'—'}</small></div>)}</div>:<p className="fineprint">Los datos aparecerán después de tus primeras respuestas.</p>}</div>
+      </div>
+     </div>:<div className="exercise">
       <span className="eyebrow">{trainingMode==='receive'?'RECEPCIÓN / 5 CARACTERES':'ENVÍO / 5 CARACTERES'}</span>
       <div className="exercise-target">{!target?'LISTO':trainingMode==='receive'?'♫  ♫  ♫':target}</div>
       <p className="muted">{!target?'Prepara tus auriculares y empieza una sesión.':trainingMode==='receive'?'Escucha el grupo completo y escribe lo que has reconocido.':'Transmite el grupo con tus paletas; luego comprueba el resultado.'}</p>
