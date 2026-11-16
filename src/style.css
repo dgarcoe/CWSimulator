@@ -166,3 +166,12 @@ footer{margin-top:20px;padding:13px 0}
 .lesson-progress-bars button small{font-size:9px;color:var(--muted)}
 .lesson-progress-track{height:85px;width:13px;background:var(--panel);display:flex;align-items:end;border:1px solid var(--line)}
 .lesson-progress-track i{display:block;width:100%;background:var(--chart);min-height:1px}
+
+.lesson-insights{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:16px 0 10px}
+.lesson-insights>div{padding:12px;border:1px solid var(--line);background:var(--inset);display:flex;flex-direction:column;gap:7px;min-width:0}
+.lesson-insights small{font-size:9px;letter-spacing:.5px;color:var(--muted)}
+.lesson-insights strong{font-size:22px;font-family:Consolas,monospace;color:var(--chart)}
+.lesson-insights span{font-size:10px;color:var(--muted)}
+.progress-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.progress-actions button{padding:9px 12px;font-size:11px}
+@media(max-width:680px){.lesson-insights{grid-template-columns:1fr}.lesson-insights>div{gap:3px}}
