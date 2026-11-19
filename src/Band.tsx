@@ -53,6 +53,14 @@ function voice(ctx:AudioContext,station:Station,index:number,caller=false){
  return {osc,gain,send,cq,signal:caller?send('E',.5,false):cq(),close(){source.stop();source.disconnect();osc.stop();osc.disconnect();key.disconnect();gain.disconnect()}};
 }
 type Voice=ReturnType<typeof voice>;
+type Turn={phase:string;next:number;winner:number;offer?:{call:string;offset:number}};
+function fading(time:number,path:number,qsb:number){
+ const phase=time*(.6+path*.13)+path;
+ return 1-qsb/100*(.5+.32*Math.sin(phase)+.18*Math.sin(phase*.39+path));
+}
+function copyLevel(power:number,offset:number,path:number,time:number,qsb:number,qrn:number){
+ return power*fading(time,path,qsb)/(1+(offset/65)**2)/(.12+qrn/180);
+}
 type Props={hz:number;tune:(n:number)=>void;tone:number;volume:number;qrn:number;qsb:number;call:string;setCall:(call:string)=>void;decoded:string};
 export function Band(props:Props){
  const {hz,tune,call}=props;
@@ -60,9 +68,20 @@ export function Band(props:Props){
  const [split,setSplit]=useState(false),[offset,setOffset]=useState(1000);
  const [monitor,setMonitor]=useState(false);
  const txHz=hz+(split?offset:0);
- const canvas=useRef<HTMLCanvasElement>(null), rig=useRef<{ctx:AudioContext;voices:Voice[];stations:Station[];busy:Set<number>}|null>(null);
+ const canvas=useRef<HTMLCanvasElement>(null), rig=useRef<{ctx:AudioContext;voices:Voice[];stations:Station[];traffic:Turn[];busy:Set<number>}|null>(null);
  const settings=useRef({...props,width});settings.current={...props,width,hz:split&&monitor?txHz:hz};
  const baseline=useRef('');
+ const partial=useRef<{index:number;call:string;until:number}|null>(null);
+ function answer(v:Voice,station:Station,index:number,own:string,unclear:boolean,time:number){
+  if(unclear){
+   v.signal=v.send(own.slice(0,2)+'? AGN K',0,false);
+   partial.current={index,call:own,until:time+18};
+   setFeedback('El DX pide una repetición. Escucha el parcial y repite tu indicativo durante la pausa.');
+  }else{
+   v.signal=v.send(own+' DE '+station.call+' UR RST 579 NAME '+station.name+' QTH '+station.qth+' KN');
+   setContact(index);setFeedback('Te ha contestado. Copia el intercambio y envía tu RST en la pausa.');
+  }
+ }
  useEffect(()=>{
   if(!on)return;
   const stations=makeStations();
@@ -72,20 +91,27 @@ export function Band(props:Props){
    const station={...s,call,hz:s.hz+s.split+(n?40:-30),wpm:19+4*n,power:.45+.1*n};
    return {station,voice:voice(ctx,station,i,true),target:i};
   }):[]);
-  const traffic=stations.map(()=>({phase:'idle',next:ctx.currentTime+2,winner:0}));
+  const traffic:Turn[]=stations.map(()=>({phase:'idle',next:ctx.currentTime+2,winner:0}));
   const signals=[...stations.map((station,i)=>({station,voice:voices[i]})),...rivals];
   const noise=ctx.createBufferSource(),noiseGain=ctx.createGain();
   const buffer=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);
   const data=buffer.getChannelData(0);
   for(let i=0;i<data.length;i++)data[i]=Math.random()*2-1;
   noise.buffer=buffer;noise.loop=true;noiseGain.gain.value=0;
-  noise.connect(noiseGain).connect(ctx.destination);noise.start();
-  rig.current={ctx,voices,stations,busy};
+  const passband=ctx.createBiquadFilter();passband.type='bandpass';
+  noise.connect(passband).connect(noiseGain).connect(ctx.destination);noise.start();
+  rig.current={ctx,voices,stations,busy,traffic};
   void ctx.resume().catch(()=>{if(rig.current?.ctx===ctx){setFeedback('No se pudo activar el audio. Vuelve a abrir la banda.');setOn(false)}});
   const screen=canvas.current!,g=screen.getContext('2d')!;
   g.fillStyle='#071820';g.fillRect(0,0,screen.width,screen.height);
   const timer=window.setInterval(()=>{
    const p=settings.current,t=ctx.currentTime;
+   passband.frequency.setTargetAtTime(p.tone,t,.03);
+   passband.Q.setTargetAtTime(p.tone/p.width,t,.03);
+   if(partial.current&&t>partial.current.until){
+    const i=partial.current.index;partial.current=null;busy.delete(i);voices[i].signal=voices[i].cq();
+    setFeedback('El DX ha vuelto a llamar CQ.');
+   }
    noiseGain.gain.setTargetAtTime(p.volume*p.qrn/500,t,.02);
    g.drawImage(screen,0,0,screen.width,screen.height-1,0,1,screen.width,screen.height-1);
    g.fillStyle='#071820';g.fillRect(0,0,screen.width,1);
@@ -96,11 +122,23 @@ export function Band(props:Props){
     const callers=rivals.filter(r=>r.target===i);
     if(turn.phase==='idle'){
      if(busy.has(i)||!dx.signal.listening(t))return;
-     busy.add(i);turn.phase='calling';turn.winner=Math.floor(Math.random()*callers.length);
+     busy.add(i);turn.phase='calling';turn.offer=undefined;
      for(const r of callers)r.voice.signal=r.voice.send(r.station.call,0,false);
      dx.signal=dx.send('E',.5,false);
     }else if(turn.phase==='calling'){
      if(!callers.every(r=>r.voice.signal.finished(t)))return;
+     const scores=callers.map(r=>copyLevel(r.station.power,r.station.hz-s.hz-s.split,signals.indexOf(r),t,p.qsb,p.qrn));
+     turn.winner=scores[0]>=scores[1]?0:1;
+     if(turn.offer){
+      const {call,offset}=turn.offer;turn.offer=undefined;
+      const level=copyLevel(.75,offset,i,t,p.qsb,p.qrn);
+      if(level>=scores[turn.winner]){
+       turn.phase='idle';turn.next=t+15;
+       answer(dx,s,i,call,level<1.5||level<2*scores[turn.winner],t);
+       return;
+      }
+      setFeedback('El DX ha copiado a otro operador. Espera su siguiente CQ.');
+     }
      dx.signal=dx.send(callers[turn.winner].station.call+' 599 K',0,false);turn.phase='report';
     }else if(turn.phase==='report'){
      if(!dx.signal.finished(t))return;
@@ -113,7 +151,7 @@ export function Band(props:Props){
    });
    signals.forEach(({voice:v,station:s},i)=>{
     const offset=s.hz-p.hz;
-    const fade=1-p.qsb/100*(.5+.5*Math.sin(t*(.6+i*.13)+i));
+    const fade=fading(t,i,p.qsb);
     const response=1/Math.sqrt(1+Math.pow(2*offset/p.width,8));
     v.osc.frequency.setTargetAtTime(Math.max(30,p.tone+offset),t,.012);
     v.gain.gain.setTargetAtTime(p.volume*s.power*fade*response,t,.012);
@@ -121,7 +159,7 @@ export function Band(props:Props){
     g.fillRect((s.hz-low)/(high-low)*screen.width-2,0,5,1);
    });
   },25);
-  return ()=>{clearInterval(timer);rig.current=null;signals.forEach(s=>s.voice.close());noise.stop();void ctx.close()};
+  return ()=>{clearInterval(timer);partial.current=null;rig.current=null;signals.forEach(s=>s.voice.close());noise.stop();void ctx.close()};
  },[on]);
  function transmit(){
   const radio=rig.current;if(!radio)return;
@@ -130,14 +168,27 @@ export function Band(props:Props){
   if(index<0){setFeedback('Sin respuesta. Afina la frecuencia y vuelve a llamar.');return}
   const station=radio.stations[index],v=radio.voices[index];
   if(Math.abs(txHz-station.hz-station.split)>70){setFeedback('Sin respuesta en TX. Escucha si anuncia UP y ajusta el desplazamiento.');return}
-  if(radio.busy.has(index)&&contact!==index){setFeedback('Está trabajando a otro operador. Escucha el intercambio y espera el siguiente CQ.');return}
-  if(!v.signal.listening(radio.ctx.currentTime)){setFeedback('La estación está transmitiendo. Espera el cambio.');return}
-  if(contact===null){
+  const time=radio.ctx.currentTime, turn=radio.traffic[index], pending=partial.current;
+  if(pending){
+   if(index!==pending.index||own!==pending.call||!words.includes(pending.call)){setFeedback('Repite tu indicativo completo al corresponsal que pidió el parcial.');return}
+   if(!v.signal.finished(time)){setFeedback('Espera a que termine la petición.');return}
+   partial.current=null;answer(v,station,index,own,false,time);
+  }else if(contact===null){
+   const competing=turn.phase==='calling';
+   if(radio.traffic.some(other=>other.offer)){setFeedback('Espera la respuesta del DX a tu llamada.');return}
+   if(radio.busy.has(index)&&!competing){setFeedback('Está trabajando a otro operador. Espera el siguiente CQ.');return}
+   if(!competing&&!v.signal.listening(time)){setFeedback('La estación está transmitiendo. Espera el cambio.');return}
    if(!/^[A-Z0-9/]{3,12}$/.test(own)||words[0]!==station.call||words[1]!=='DE'||!words.slice(2,-1).includes(own)||!['K','KN'].includes(words[words.length-1]||'')){setFeedback('Sin respuesta. Comprueba los indicativos, DE y el cambio K.');return}
-   v.signal=v.send(own+' DE '+station.call+' UR RST 579 NAME '+station.name+' QTH '+station.qth+' KN');
-   radio.busy.add(index);setContact(index);setFeedback('Te ha contestado. Copia el intercambio y envía tu RST en la pausa.');
+   const offset=txHz-station.hz-station.split;
+   if(competing){
+    turn.offer={call:own,offset};setFeedback('Has llamado junto a otros operadores. Escucha a quién responde el DX.');
+   }else{
+    radio.busy.add(index);
+    answer(v,station,index,own,copyLevel(.75,offset,index,time,props.qsb,props.qrn)<1.5,time);
+   }
   }else{
    if(index!==contact||!words.some(w=>/^[1-5][1-9][1-9]$/.test(w))){setFeedback('Vuelve al corresponsal y envía un reporte RST.');return}
+   if(!v.signal.listening(time)){setFeedback('Espera a que termine el reporte.');return}
    v.signal=v.send(own+' TU 73 SK');
    const farewell=v.signal;
    const check=()=>{if(rig.current!==radio||v.signal!==farewell)return;if(farewell.listening(radio.ctx.currentTime)){v.signal=v.cq();radio.busy.delete(index)}else window.setTimeout(check,100)};
