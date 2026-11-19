@@ -221,3 +221,23 @@ footer{margin-top:20px;padding:13px 0}
 .academy-tabs button{flex:1 1 170px;padding:12px 16px;border:1px solid transparent;background:transparent;color:var(--muted);font-size:12px;font-weight:650;cursor:pointer}
 .academy-tabs button.active{color:var(--ink);background:var(--panel);border-color:var(--accent)}
 .academy-tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.radio-console > .panel:first-child {
+ grid-column:1/-1;
+ background:linear-gradient(145deg,#303a40,#151c21);
+ color:#f1f4ec;
+ border:3px solid #515b60;
+ border-radius:16px;
+ box-shadow:inset 0 1px #889198,0 4px 10px #10161940;
+}
+.radio-console > .panel:first-child :is(h2,label,.panel-kicker){color:#ebf1ed}
+.radio-console .frequency{
+ background:#142921;
+ color:#a8ffd0;
+ border:4px solid #101819;
+ box-shadow:inset 0 2px 9px #0008;
+ font-family:monospace;
+}
+.radio-console .frequency :is(span,strong,small){color:inherit}
+.radio-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:8px 24px;margin:14px 0}
+.radio-console > .panel:last-child{grid-column:auto}
