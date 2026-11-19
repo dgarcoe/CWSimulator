@@ -87,3 +87,5 @@ You can call during the rival callers’ turn. The DX compares received levels a
 The live band uses an illustrative equinox scenario with a receiver in Madrid. The UTC slider holds a selected hour while stations continue transmitting. Each path uses great-circle distance and solar illumination at its midpoint to vary daytime absorption and short-path nighttime loss. QSB sets the amplitude of a second interfering CW ray. Optional storm impulses share their timing between the receiver noise and the waterfall.
 
 During a contact, enter the received RST, name and QTH in the copy field. Send RST AGN?, NAME? or QTH? in the listening gap for a selective repeat. Sending a valid RST closes the exchange and saves the simulated UTC hour, distance, RX/TX frequencies, sent RST, copied exchange and transmitted reference in the local logbook.
+
+To originate a contact, tune to a clear frequency in simplex, press QRL? and then Llamar CQ. Listen for one or two callers. A partial such as G3? requests a repeat from matching stations. Answer the chosen caller with its callsign, DE, your callsign and K, then complete and log the exchange as usual.

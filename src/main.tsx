@@ -347,7 +347,7 @@ function App(){
    </div></div>}
    {page==='radio'&&<div className="content-grid radio-console">
     <section className="panel"><div className="panel-kicker">CW · 40 m</div><h2>Transceptor CW</h2><div className="tuning-head"><div className="frequency"><span>VFO A · CW</span><strong>{dial.toLocaleString("de-DE")} <small>Hz</small></strong><span>{keys.dit||keys.dah?'TX':rxPlaying?'RX':'VFO A'} · {tone} Hz · {wpm} WPM</span></div><RadioKnob large label="Sintonía VFO" value={dial} min={7024000} max={7026500} step={10} readout={dial.toLocaleString("de-DE")+" Hz"} change={setDial}/></div>
-     <Band hz={dial} tune={setDial} setCall={setMyCall} call={myCall} tone={tone} volume={volume} qrn={qrn} qsb={qsb} decoded={decoded}/>
+     <Band wpm={wpm} hz={dial} tune={setDial} setCall={setMyCall} call={myCall} tone={tone} volume={volume} qrn={qrn} qsb={qsb} decoded={decoded}/>
      <div className="radio-controls">
       <RadioKnob label="Velocidad" value={wpm} min={10} max={40} step={1} readout={wpm+' WPM'} change={setWpm}/>
       <RadioKnob label="Tono" value={tone} min={400} max={900} step={25} readout={tone+' Hz'} change={setTone}/>
