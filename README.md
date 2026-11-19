@@ -81,3 +81,9 @@ Set your callsign, copy a CQ and send the other callsign followed by DE, your ca
 Each band opening generates fresh training callsigns. One operator works simplex and two announce split in their CQ: UP 1 (1 kHz) or UP 0R5 (500 Hz). Keep the VFO on the calling station, enable Split and adjust the transmit offset. Use the TX monitor to hear competing callers before switching back to the DX frequency. Rivals call on slightly different frequencies; the DX selects one, exchanges reports and returns to CQ.
 
 You can call during the rival callers’ turn. The DX compares received levels after tuning loss and fading. If your call is strongest but has little margin over the noise or the next caller, the DX sends a partial callsign and AGN. Repeat your full callsign before the DX returns to CQ. Receiver noise passes through a band-pass filter linked to CW pitch and filter width.
+
+### Propagation practice and logbook
+
+The live band uses an illustrative equinox scenario with a receiver in Madrid. The UTC slider holds a selected hour while stations continue transmitting. Each path uses great-circle distance and solar illumination at its midpoint to vary daytime absorption and short-path nighttime loss. QSB sets the amplitude of a second interfering CW ray. Optional storm impulses share their timing between the receiver noise and the waterfall.
+
+During a contact, enter the received RST, name and QTH in the copy field. Send RST AGN?, NAME? or QTH? in the listening gap for a selective repeat. Sending a valid RST closes the exchange and saves the simulated UTC hour, distance, RX/TX frequencies, sent RST, copied exchange and transmitted reference in the local logbook.
