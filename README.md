@@ -71,3 +71,9 @@ The Academy has an independent listening pitch slider (350–1000 Hz), a tone pr
 ## Guided training and CW keyboard
 
 The Academy now supports guided blocks of 5, 10 or 20 exercises, a session average, a character confusion summary based on stored target/answer pairs, and a CW Keyboard mode that plays typed text as Morse using Academy speed, effective speed and pitch. Keyboard mode currently converts the full entered text on demand; it does not yet stream each keystroke in real time. Slate is the default for new installs; existing saved palette choices remain unchanged. Session progress is not yet persisted, and exercises advance manually. Changes require local build and browser testing.
+
+## Live 40 m practice band
+
+Open **Estación → Abrir banda** to listen to three simulated operators between 7.0240 and 7.0265 MHz. The waterfall samples the same keying envelopes that drive the audio. Click a trace for coarse tuning and focus the VFO slider for 10 Hz keyboard steps. The shaded area shows the selected filter width. Volume, pitch, QRN and QSB affect the active band in real time.
+
+Set your callsign, copy a CQ and send the other callsign followed by DE, your callsign and K during the listening pause. Tune within 70 Hz of the station to make contact. Copy its reply and send a three-digit RST in the next pause. The other operators continue calling throughout the exchange. Closing the band ends the practice session.

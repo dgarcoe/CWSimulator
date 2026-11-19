@@ -1,3 +1,4 @@
+import {Band} from './Band';
 import React, {useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import './style.css';
@@ -64,6 +65,7 @@ function App(){
  const [weaknesses,setWeaknesses]=useState<Record<string,number>>(()=>{try{return JSON.parse(localStorage.getItem('cw-weaknesses')||'{}')}catch{return {}}});
  useEffect(()=>{localStorage.setItem('cw-weaknesses',JSON.stringify(weaknesses))},[weaknesses]);
  const [myCall,setMyCall]=useState(()=>localStorage.getItem('cw-my-call')||'EA1ABC');
+ const [dial,setDial]=useState(7025000);
  const [qsoContact,setQsoContact]=useState(0),[qsoReveal,setQsoReveal]=useState(false),[qsoPaddleStart,setQsoPaddleStart]=useState('');
  const qsoStations=[{call:'EA1TEST',name:'ANA',qth:'VIGO',rst:'599'},{call:'F4ABC',name:'LUC',qth:'LYON',rst:'579'},{call:'DL2XYZ',name:'MAX',qth:'BONN',rst:'559'},{call:'G3MOR',name:'SAM',qth:'YORK',rst:'589'}];
  const qsoStation=qsoStations[qsoContact%qsoStations.length];
@@ -333,7 +335,8 @@ function App(){
     </>}
    </div></div>}
    {page==='radio'&&<div className="content-grid radio-console">
-    <section className="panel"><div className="panel-kicker">CW · 40 m</div><h2>Transceptor CW</h2><div className="frequency"><span>VFO A · CW</span><strong>7.025.000 <small>Hz</small></strong><span>{keys.dit||keys.dah?'TX':rxPlaying?'RX':'EN ESPERA'} · {tone} Hz · {wpm} WPM</span></div>
+    <section className="panel"><div className="panel-kicker">CW · 40 m</div><h2>Transceptor CW</h2><div className="frequency"><span>VFO A · CW</span><strong>{dial.toLocaleString("de-DE")} <small>Hz</small></strong><span>{keys.dit||keys.dah?'TX':rxPlaying?'RX':'VFO A'} · {tone} Hz · {wpm} WPM</span></div>
+     <Band hz={dial} tune={setDial} setCall={setMyCall} call={myCall} tone={tone} volume={volume} qrn={qrn} qsb={qsb} decoded={decoded}/>
      <div className="radio-controls"><label>Velocidad <b>{wpm} WPM</b><input type="range" min="10" max="40" value={wpm} onChange={e=>setWpm(+e.target.value)}/></label><label>Tono <b>{tone} Hz</b><input type="range" min="400" max="900" step="25" value={tone} onChange={e=>setTone(+e.target.value)}/></label><label>Volumen <b>{Math.round(volume*100)}%</b><input type="range" min="0" max=".6" step=".01" value={volume} onChange={e=>setVolume(+e.target.value)}/></label><label>Modo iámbico<select value={mode} onChange={e=>setMode(e.target.value as 'A'|'B')}><option>A</option><option>B</option></select></label><label>Ruido QRN <b>{qrn}%</b><input type="range" value={qrn} onChange={e=>setQrn(+e.target.value)}/></label><label>Desvanecimiento QSB <b>{qsb}%</b><input type="range" value={qsb} onChange={e=>setQsb(+e.target.value)}/></label></div><button onClick={()=>void initAudio()}>Activar audio</button>
     </section>
     <section className="panel"><div className="panel-kicker">02 / ESTACIÓN REMOTA</div><h2>Escucha una llamada</h2><p className="muted">Una estación transmite un mensaje de prueba. Todavía no responde a tu indicativo.</p><label>Mensaje CW<input className="textinput" value={rxMessage} onChange={e=>setRxMessage(e.target.value.toUpperCase())} maxLength={100}/></label><div className="row"><button className="primary" disabled={rxPlaying} onClick={()=>void transmitStation()}>Escuchar CQ</button><button disabled={!rxPlaying} onClick={stopStation}>Detener</button></div>
