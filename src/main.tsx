@@ -67,10 +67,11 @@ function App(){
  const [qsoContact,setQsoContact]=useState(0),[qsoReveal,setQsoReveal]=useState(false),[qsoPaddleStart,setQsoPaddleStart]=useState('');
  const qsoStations=[{call:'EA1TEST',name:'ANA',qth:'VIGO',rst:'599'},{call:'F4ABC',name:'LUC',qth:'LYON',rst:'579'},{call:'DL2XYZ',name:'MAX',qth:'BONN',rst:'559'},{call:'G3MOR',name:'SAM',qth:'YORK',rst:'589'}];
  const qsoStation=qsoStations[qsoContact%qsoStations.length];
- const [qsoStage,setQsoStage]=useState(0),[qsoTx,setQsoTx]=useState(''),[qsoLog,setQsoLog]=useState<{who:string;text:string}[]>([]),[qsoFeedback,setQsoFeedback]=useState('');
+ const [qsoStage,setQsoStage]=useState(0),[qsoTx,setQsoTx]=useState(''),[qsoLog,setQsoLog]=useState<{direction:'rx'|'tx';who:string;text:string}[]>([]),[qsoFeedback,setQsoFeedback]=useState('');
  useEffect(()=>{localStorage.setItem('cw-my-call',myCall)},[myCall]);
  const [rxMessage,setRxMessage]=useState('CQ CQ DE EA1TEST EA1TEST K'),[rxPlaying,setRxPlaying]=useState(false);
  const rxPlayback=useRef<Playback|null>(null),rxTimeout=useRef<number|undefined>(undefined);
+ const stationPlaybackRequest=useRef(0);
  const [deviceInfo,setDeviceInfo]=useState(''),[qrn,setQrn]=useState(0),[qsb,setQsb]=useState(0);
  const [mapping,setMapping]=useState<Record<Lever,string>>(()=>{try{const v=JSON.parse(localStorage.getItem('cw-keyboard-map')||'null');if(v&&typeof v.dit==='string'&&typeof v.dah==='string')return v}catch{}return {dit:'KeyZ',dah:'KeyX'}});
  const [learning,setLearning]=useState<Lever|null>(null);
@@ -157,23 +158,51 @@ function App(){
   letterTimer.current=window.setTimeout(flushLetter,dot*3);
   wordTimer.current=window.setTimeout(()=>{flushLetter();setDecoded(p=>p&&!p.endsWith(' ')?p+' ':p)},dot*7);
  }
- async function transmitStation(){
+ async function playStationMessage(message:string){
+  stopStation();
+  const request=stationPlaybackRequest.current;
   await initAudio();
-  rxPlayback.current?.stop();window.clearTimeout(rxTimeout.current);
-  rxPlayback.current=playCw(audio.current!,rxMessage,wpmRef.current,toneRef.current+110,Math.min(.35,volumeRef.current));
+  if(request!==stationPlaybackRequest.current)return;
+  rxPlayback.current=playCw(audio.current!,message,wpmRef.current,toneRef.current+110,Math.min(.35,volumeRef.current));
   setRxPlaying(true);
   rxTimeout.current=window.setTimeout(()=>{setRxPlaying(false);rxPlayback.current=null},(rxPlayback.current.duration+.15)*1000);
  }
+ function transmitStation(){void playStationMessage(rxMessage)}
  const remoteCall='EA1TEST';
- function remoteQso(message:string,stationCall=qsoStation.call){stopStation();setQsoLog(prev=>[...prev,{who:stationCall,text:message}]);void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,message,wpmRef.current,toneRef.current+110,Math.min(.35,volumeRef.current));setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
- function startQso(){const station=qsoStations[(qsoContact+1)%qsoStations.length];setQsoContact(i=>i+1);setQsoStage(1);setQsoTx('');setQsoPaddleStart(decoded);setQsoLog([]);setQsoReveal(false);setQsoFeedback('Escucha el CQ, copia el indicativo y responde con tu indicativo y K.');remoteQso('CQ CQ DE '+station.call+' '+station.call+' K',station.call)}
- function submitQso(){const tx=qsoTx.trim().toUpperCase().replace(/\s+/g,' ');if(!tx)return;const call=myCall.trim().toUpperCase();if(!/^[A-Z0-9/]{3,12}$/.test(call)){setQsoFeedback('Introduce un indicativo válido antes de transmitir.');return}
- if(qsoStage===1&&(!tx.includes(call)||!tx.includes(qsoStation.call))){setQsoFeedback('Incluye el indicativo escuchado y tu indicativo. Puedes repetir el CQ.');return}
- if(qsoStage===2&&!/\b(5[1-9]9|RST|599|NAME|QTH)\b/.test(tx)){setQsoFeedback('Envía un reporte RST, nombre o QTH.');return}
- setQsoLog(prev=>[...prev,{who:call,text:tx}]);setQsoTx('');setQsoPaddleStart(decoded);
- if(qsoStage===1){setQsoStage(2);setQsoFeedback('Copia su reporte, nombre y QTH y envía tu reporte.');remoteQso(call+' DE '+qsoStation.call+' GM UR RST '+qsoStation.rst+' NAME '+qsoStation.name+' QTH '+qsoStation.qth+' HW CPY? '+call+' DE '+qsoStation.call+' KN')}
- else if(qsoStage===2){setQsoStage(3);setQsoFeedback('QSO completado. Inicia otro contacto con una estación diferente.');remoteQso(call+' DE '+qsoStation.call+' TNX FER QSO 73 SK')}}
- function stopStation(){rxPlayback.current?.stop();rxPlayback.current=null;window.clearTimeout(rxTimeout.current);setRxPlaying(false)}
+ function remoteQso(message:string,stationCall=qsoStation.call){
+  setQsoLog(prev=>[...prev,{direction:'rx',who:stationCall,text:message}]);
+  void playStationMessage(message);
+ }
+ function repeatQsoReception(){
+  const message=qsoLog.filter(entry=>entry.direction==='rx').pop();
+  if(message)void playStationMessage(message.text);
+ }
+ function startQso(){const station=qsoStations[(qsoContact+1)%qsoStations.length];setQsoContact(i=>i+1);setQsoStage(1);setQsoTx('');setQsoPaddleStart(decoded);setQsoLog([]);setQsoReveal(false);setQsoFeedback('Escucha el CQ y responde con el indicativo de la estación, DE, tu indicativo y K.');remoteQso('CQ CQ DE '+station.call+' '+station.call+' K',station.call)}
+ function submitQso(){
+  const tx=qsoTx.trim().toUpperCase().replace(/\s+/g,' ');
+  if(!tx||(qsoStage!==1&&qsoStage!==2))return;
+  const call=myCall.trim().toUpperCase();
+  if(!/^[A-Z0-9/]{3,12}$/.test(call)){setQsoFeedback('Introduce un indicativo válido antes de transmitir.');return}
+  const words=tx.split(' ');
+  if(qsoStage===1){
+   const separator=words.indexOf('DE');
+   const addressed=separator>0&&words.slice(0,separator).includes(qsoStation.call);
+   const identified=separator>=0&&words.slice(separator+1,-1).includes(call);
+   if(!addressed||!identified||!['K','KN'].includes(words[words.length-1])){
+    setQsoFeedback('Envía el indicativo escuchado, DE, tu indicativo y termina con K o KN. Puedes repetir el CQ.');
+    return;
+   }
+  }
+  if(qsoStage===2&&!words.some(word=>/^[1-5][1-9][1-9]$/.test(word))){
+   setQsoFeedback('Envía un reporte RST de tres cifras, por ejemplo RST 579.');
+   return;
+  }
+  setQsoLog(prev=>[...prev,{direction:'tx',who:call,text:tx}]);
+  setQsoTx('');setQsoPaddleStart(decoded);
+  if(qsoStage===1){setQsoStage(2);setQsoFeedback('Copia su reporte, nombre y QTH y envía tu reporte RST.');remoteQso(call+' DE '+qsoStation.call+' GM UR RST '+qsoStation.rst+' NAME '+qsoStation.name+' QTH '+qsoStation.qth+' HW CPY? '+call+' DE '+qsoStation.call+' KN')}
+  else{setQsoStage(3);setQsoFeedback('QSO completado. Inicia otro contacto con una estación diferente.');remoteQso(call+' DE '+qsoStation.call+' TNX FER QSO 73 SK')}
+ }
+ function stopStation(){stationPlaybackRequest.current++;rxPlayback.current?.stop();rxPlayback.current=null;window.clearTimeout(rxTimeout.current);setRxPlaying(false)}
  function next(){
   const active=down.current;
   const remembered=pending.current;
@@ -308,7 +337,7 @@ function App(){
      <label>Velocidad <b>{wpm} WPM</b><input type="range" min="10" max="40" value={wpm} onChange={e=>setWpm(+e.target.value)}/></label><label>Tono <b>{tone} Hz</b><input type="range" min="400" max="900" step="25" value={tone} onChange={e=>setTone(+e.target.value)}/></label><label>Volumen <b>{Math.round(volume*100)}%</b><input type="range" min="0" max=".6" step=".01" value={volume} onChange={e=>setVolume(+e.target.value)}/></label><label>Modo iámbico<select value={mode} onChange={e=>setMode(e.target.value as 'A'|'B')}><option>A</option><option>B</option></select></label><button onClick={()=>void initAudio()}>Activar audio</button>
     </section>
     <section className="panel"><div className="panel-kicker">02 / ESTACIÓN REMOTA</div><h2>Escucha una llamada</h2><p className="muted">Una estación transmite un mensaje de prueba. Todavía no responde a tu indicativo.</p><label>Mensaje CW<input className="textinput" value={rxMessage} onChange={e=>setRxMessage(e.target.value.toUpperCase())} maxLength={100}/></label><div className="row"><button className="primary" disabled={rxPlaying} onClick={()=>void transmitStation()}>Escuchar CQ</button><button disabled={!rxPlaying} onClick={stopStation}>Detener</button></div>
-     <div className="qso-simulator"><div className="panel-kicker">SIMULADOR QSO · CONTACTO POR RADIO</div><p className="fineprint">Escucha el CQ sin leer la transcripción. Identifica la estación, responde y completa el contacto. Cada QSO cambia de corresponsal.</p><label>Tu indicativo<input className="textinput" value={myCall} maxLength={12} onChange={e=>setMyCall(e.target.value.toUpperCase())}/></label><div className="row"><button onClick={startQso}>{qsoStage===0?'Iniciar QSO':'Nueva estación / reiniciar'}</button><span className="fineprint">Estado: {qsoStage===0?'Sin iniciar':qsoStage===3?'Finalizado':'Paso '+qsoStage+' de 2'}</span></div>{qsoStage>0&&<><div className="row"><button onClick={()=>{const msg=qsoLog.filter(e=>e.who===qsoStation.call).slice(-1)[0];if(msg)remoteQso(msg.text)}}>▶ Repetir última recepción</button><button onClick={()=>setQsoReveal(v=>!v)}>{qsoReveal?'Ocultar transcripción':'Mostrar transcripción / ayuda'}</button></div>{qsoReveal&&<div className="qso-log" aria-live="polite">{qsoLog.map((entry,i)=><div key={i}><b>{entry.who}</b><span>{entry.text}</span></div>)}</div>}<p className="fineprint" role="status">{qsoFeedback}</p>{qsoStage<3&&<><label>Tu transmisión<input className="textinput" value={qsoTx} onChange={e=>setQsoTx(e.target.value.toUpperCase())} onKeyDown={e=>{if(e.key==='Enter')submitQso()}} placeholder="Escribe tu respuesta o usa el manipulador"/></label><div className="row"><button className="primary" onClick={submitQso}>Enviar respuesta</button><button onClick={()=>setQsoTx(decoded.startsWith(qsoPaddleStart)?decoded.slice(qsoPaddleStart.length).trim():decoded)}>Capturar texto del manipulador</button></div><p className="fineprint">Para transmitir con las paletas, deja el foco fuera de los campos de texto. La captura utiliza el decodificador de la estación.</p></>}</>}</div><div className="panel-kicker space-top">PROPAGACIÓN · PRÓXIMAMENTE</div><p className="muted">QRN y QSB todavía no modifican el sonido.</p><label>QRN <b>{qrn}%</b><input type="range" value={qrn} onChange={e=>setQrn(+e.target.value)}/></label><label>QSB <b>{qsb}%</b><input type="range" value={qsb} onChange={e=>setQsb(+e.target.value)}/></label>
+     <div className="qso-simulator"><div className="panel-kicker">SIMULADOR QSO · CONTACTO POR RADIO</div><p className="fineprint">Escucha el CQ sin leer la transcripción. Identifica la estación, responde y completa el contacto. Cada QSO cambia de corresponsal.</p><label>Tu indicativo<input className="textinput" value={myCall} maxLength={12} onChange={e=>setMyCall(e.target.value.toUpperCase())}/></label><div className="row"><button onClick={startQso}>{qsoStage===0?'Iniciar QSO':'Nueva estación / reiniciar'}</button><span className="fineprint">Estado: {qsoStage===0?'Sin iniciar':qsoStage===3?'Finalizado':'Paso '+qsoStage+' de 2'}</span></div>{qsoStage>0&&<><div className="row"><button onClick={repeatQsoReception}>▶ Repetir última recepción</button><button onClick={()=>setQsoReveal(v=>!v)}>{qsoReveal?'Ocultar transcripción':'Mostrar transcripción / ayuda'}</button></div>{qsoReveal&&<div className="qso-log" aria-live="polite">{qsoLog.map((entry,i)=><div key={i}><b>{entry.who}</b><span>{entry.text}</span></div>)}</div>}<p className="fineprint" role="status">{qsoFeedback}</p>{qsoStage<3&&<><label>Tu transmisión<input className="textinput" value={qsoTx} onChange={e=>setQsoTx(e.target.value.toUpperCase())} onKeyDown={e=>{if(e.key==='Enter')submitQso()}} placeholder="Escribe tu respuesta o usa el manipulador"/></label><div className="row"><button className="primary" onClick={submitQso}>Enviar respuesta</button><button onClick={()=>setQsoTx(decoded.startsWith(qsoPaddleStart)?decoded.slice(qsoPaddleStart.length).trim():decoded)}>Capturar texto del manipulador</button></div><p className="fineprint">Para transmitir con las paletas, deja el foco fuera de los campos de texto. La captura utiliza el decodificador de la estación.</p></>}</>}</div><div className="panel-kicker space-top">PROPAGACIÓN · PRÓXIMAMENTE</div><p className="muted">QRN y QSB todavía no modifican el sonido.</p><label>QRN <b>{qrn}%</b><input type="range" value={qrn} onChange={e=>setQrn(+e.target.value)}/></label><label>QSB <b>{qsb}%</b><input type="range" value={qsb} onChange={e=>setQsb(+e.target.value)}/></label>
     </section>
     <section className="panel full-width"><div className="panel-kicker">03 / TU TRANSMISIÓN</div><h2>Texto recibido del manipulador</h2><div className="decoded">{decoded||'A la espera de una transmisión…'}</div><p className="fineprint">Último carácter: {rawSymbols?rawSymbols.length+' elementos detectados':'sin datos'} · O = 3 rayas; 0 = 5 rayas. Si aparece O al transmitir 0, comprueba que el keyer ha generado las cinco rayas antes de soltar la leva.</p><div className="row"><button onClick={()=>{sequence.current='';window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current);setDecoded('');setRawSymbols('')}}>Limpiar texto</button><button onClick={()=>setPage('hardware')}>Configurar paletas</button></div></section>
    </div>}
