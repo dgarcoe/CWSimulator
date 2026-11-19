@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
-import {CW_CODES} from './cwPlayback';
+import {CW_CODES,fading} from './cwPlayback';
 
 const low=7024000, high=7026500;
 const channels=[
@@ -54,10 +54,6 @@ function voice(ctx:AudioContext,station:Station,index:number,caller=false){
 }
 type Voice=ReturnType<typeof voice>;
 type Turn={phase:string;next:number;winner:number;offer?:{call:string;offset:number}};
-function fading(time:number,path:number,qsb:number){
- const phase=time*(.6+path*.13)+path;
- return 1-qsb/100*(.5+.32*Math.sin(phase)+.18*Math.sin(phase*.39+path));
-}
 function copyLevel(power:number,offset:number,path:number,time:number,qsb:number,qrn:number){
  return power*fading(time,path,qsb)/(1+(offset/65)**2)/(.12+qrn/180);
 }
@@ -94,7 +90,7 @@ export function Band(props:Props){
   const traffic:Turn[]=stations.map(()=>({phase:'idle',next:ctx.currentTime+2,winner:0}));
   const signals=[...stations.map((station,i)=>({station,voice:voices[i]})),...rivals];
   const noise=ctx.createBufferSource(),noiseGain=ctx.createGain();
-  const buffer=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate);
+  const buffer=ctx.createBuffer(1,8000,8000);
   const data=buffer.getChannelData(0);
   for(let i=0;i<data.length;i++)data[i]=Math.random()*2-1;
   noise.buffer=buffer;noise.loop=true;noiseGain.gain.value=0;
@@ -112,7 +108,7 @@ export function Band(props:Props){
     const i=partial.current.index;partial.current=null;busy.delete(i);voices[i].signal=voices[i].cq();
     setFeedback('El DX ha vuelto a llamar CQ.');
    }
-   noiseGain.gain.setTargetAtTime(p.volume*p.qrn/500,t,.02);
+   noiseGain.gain.setTargetAtTime(p.volume*p.qrn/40,t,.02);
    g.drawImage(screen,0,0,screen.width,screen.height-1,0,1,screen.width,screen.height-1);
    g.fillStyle='#071820';g.fillRect(0,0,screen.width,1);
    for(let n=0;n<25+p.qrn;n++){g.fillStyle='#20404a';g.fillRect(Math.random()*screen.width,0,1,1)}

@@ -75,6 +75,8 @@ function App(){
  const rxPlayback=useRef<Playback|null>(null),rxTimeout=useRef<number|undefined>(undefined);
  const stationPlaybackRequest=useRef(0);
  const [deviceInfo,setDeviceInfo]=useState(''),[qrn,setQrn]=useState(0),[qsb,setQsb]=useState(0);
+ const channelRef=useRef({qrn,qsb});
+ useEffect(()=>{channelRef.current={qrn,qsb};rxPlayback.current?.setChannel?.(channelRef.current)},[qrn,qsb]);
  const [mapping,setMapping]=useState<Record<Lever,string>>(()=>{try{const v=JSON.parse(localStorage.getItem('cw-keyboard-map')||'null');if(v&&typeof v.dit==='string'&&typeof v.dah==='string')return v}catch{}return {dit:'KeyZ',dah:'KeyX'}});
  const [learning,setLearning]=useState<Lever|null>(null);
  useEffect(()=>{localStorage.setItem('cw-keyboard-map',JSON.stringify(mapping))},[mapping]);
@@ -165,7 +167,7 @@ function App(){
   const request=stationPlaybackRequest.current;
   await initAudio();
   if(request!==stationPlaybackRequest.current)return;
-  rxPlayback.current=playCw(audio.current!,message,wpmRef.current,toneRef.current+110,Math.min(.35,volumeRef.current),wpmRef.current,{qrn,qsb});
+  rxPlayback.current=playCw(audio.current!,message,wpmRef.current,toneRef.current+110,Math.min(.35,volumeRef.current),wpmRef.current,channelRef.current);
   setRxPlaying(true);
   rxTimeout.current=window.setTimeout(()=>{setRxPlaying(false);rxPlayback.current=null},(rxPlayback.current.duration+.15)*1000);
  }
