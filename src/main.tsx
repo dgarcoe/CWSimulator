@@ -48,7 +48,7 @@ function App(){
   codes:[['QTH','QTH VIGO','Ubicación de la estación.'],['QRM','QRM','Interferencia de otras transmisiones.'],['QRN','QRN','Ruido atmosférico o estático.'],['QRS / QRQ','QRS PSE','Transmitir más despacio / más deprisa.'],['QRP','QRP','Operación con baja potencia.'],['QSB','QSB','Desvanecimiento de la señal.'],['QRZ?','QRZ?','¿Quién me llama?'],['QSL','QSL','Confirmación de recepción o contacto.'],['RST','RST 599','Legibilidad, intensidad y tono; 599 es un reporte habitual en CW.']],
   tips:[['Escucha antes de llamar','QRL?','Comprueba que la frecuencia esté libre antes de transmitir.'],['Pide repetir','AGN PSE','Solicita que repitan el mensaje.'],['Reduce velocidad','QRS PSE','Es preferible copiar bien a transmitir demasiado rápido.'],['Confirma datos','R R TU','Confirma lo recibido sin alargar innecesariamente el contacto.'],['Abreviaturas útiles','GM OM TNX FER QSO 73','Buenos días, colega, gracias por el contacto y despedida.']]
  };
- function playGuide(text:string){stopStation();void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,text,trainingWpm,trainingTone,volumeRef.current,Math.min(effectiveWpm,trainingWpm));setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
+ function playGuide(text:string){stopStation();const request=stationPlaybackRequest.current;void initAudio().then(()=>{if(request!==stationPlaybackRequest.current)return;rxPlayback.current=playCw(audio.current!,text,trainingWpm,trainingTone,volumeRef.current,Math.min(effectiveWpm,trainingWpm));setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
  const [progressScope,setProgressScope]=useState<'all'|'lesson'>('lesson');
  const [sessionSize,setSessionSize]=useState(10),[sessionRemaining,setSessionRemaining]=useState(0),[sessionScores,setSessionScores]=useState<number[]>([]);
  const [rawSymbols,setRawSymbols]=useState('');
@@ -311,7 +311,15 @@ function App(){
     </section>
     <section className="panel settings-panel"><div className="panel-kicker">02 / AJUSTES DE LA SESIÓN</div><h2>Tu ritmo</h2>
      <div className="koch-picker"><div className="koch-picker-head"><span>Lección Koch</span><strong>{lesson} / {KOCH.length}</strong></div><div className="koch-stepper"><button type="button" aria-label="Lección anterior" disabled={lesson<=2} onClick={()=>setLesson(p=>Math.max(2,p-1))}>−</button><span>Lección {lesson}</span><button type="button" aria-label="Lección siguiente" disabled={lesson>=KOCH.length} onClick={()=>setLesson(p=>Math.min(KOCH.length,p+1))}>+</button></div><div className="koch-quick" aria-label="Seleccionar lección Koch">{Array.from({length:KOCH.length-1},(_,i)=>i+2).map(n=><button type="button" key={n} className={lesson===n?"active":""} aria-label={"Ir a lección "+n} aria-pressed={lesson===n} title={"Lección "+n+" · "+KOCH[n-1]} onClick={()=>setLesson(n)}>{n}</button>)}</div></div>
-     <p className="character-set">CARACTERES ACTIVOS<br/><strong>{KOCH.slice(0,lesson).split('').join('  ')}</strong></p>
+     <fieldset className="koch-listen" disabled={machineRef.current.active}>
+      <legend>Escuchar caracteres de la lección</legend>
+      {Array.from(KOCH.slice(0,lesson)).map((char,index)=>{
+       const introduced=lesson===2||index===lesson-1;
+       return <button type="button" key={char} className={introduced?'primary':''}
+        aria-label={'Escuchar '+char+(introduced?(lesson===2?', carácter inicial':', nuevo en esta lección'):'')}
+        onClick={()=>playGuide(char)}>{char}{introduced&&<small>{lesson===2?'Inicial':'Nuevo'}</small>}</button>;
+      })}
+     </fieldset>
      <label>Velocidad del carácter <b>{trainingWpm} WPM</b><input type="range" min="15" max="35" value={trainingWpm} onChange={e=>setTrainingWpm(+e.target.value)}/></label>
      <label>Tono de escucha <b>{trainingTone} Hz</b><input type="range" min="350" max="1000" step="25" value={trainingTone} onChange={e=>setTrainingTone(+e.target.value)}/></label><button onClick={()=>{void initAudio().then(()=>{stopStation();rxPlayback.current=playCw(audio.current!,'VVV',trainingWpm,trainingTone,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}}>Probar tono</button><label>Velocidad efectiva <b>{Math.min(effectiveWpm,trainingWpm)} WPM</b><input type="range" min="5" max={trainingWpm} value={Math.min(effectiveWpm,trainingWpm)} onChange={e=>setEffectiveWpm(+e.target.value)}/></label>
      <label className="checkbox-label"><input type="checkbox" checked={autoAdvance} onChange={e=>setAutoAdvance(e.target.checked)}/> Avanzar automáticamente tras 10 ejercicios con ≥90% de media</label><p className="fineprint">Consejo: mantén 20 WPM de carácter y empieza con 8 WPM efectivos. Sube de lección tras alcanzar un 90% de precisión de forma consistente.</p>
