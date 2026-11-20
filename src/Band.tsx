@@ -59,13 +59,16 @@ type Turn={phase:string;next:number;winner:number;offer?:{call:string;offset:num
 function copyLevel(power:number,offset:number,path:number,time:number,qsb:number,qrn:number){
  return power*multipath(time,path,qsb)/(1+(offset/65)**2)/(.12+qrn/180);
 }
-type Props={wpm:number;hz:number;tune:(n:number)=>void;tone:number;volume:number;qrn:number;qsb:number;call:string;setCall:(call:string)=>void;decoded:string};
+type Props={onState:(state:'RX'|'TX'|null)=>void;wpm:number;hz:number;tune:(n:number)=>void;tone:number;volume:number;qrn:number;qsb:number;call:string;setCall:(call:string)=>void;decoded:string};
 export function Band(props:Props){
  const {hz,tune,call}=props;
  const [on,setOn]=useState(false),[width,setWidth]=useState(500),[tx,setTx]=useState(''),[feedback,setFeedback]=useState(''),[contact,setContact]=useState<number|null>(null);
  const [split,setSplit]=useState(false),[offset,setOffset]=useState(1000);
  const [monitor,setMonitor]=useState(false);
  const txHz=hz+(split?offset:0);
+ const afterTx=useRef<null|(()=>void)>(null);
+ const [sending,setSending]=useState(false);
+ useEffect(()=>{props.onState(on?(sending?'TX':'RX'):null);return ()=>props.onState(null)},[on,sending,props.onState]);
  const canvas=useRef<HTMLCanvasElement>(null), rig=useRef<{ctx:AudioContext;voices:Voice[];stations:Station[];traffic:Turn[];busy:Set<number>;firstCaller:number;ownTx:Voice;ownStation:Station;activeCallers:number[];occupied:(hz:number)=>boolean}|null>(null);
  const [hour,setHour]=useState(17),[storm,setStorm]=useState(false);
  const [copy,setCopy]=useState('');
@@ -133,9 +136,13 @@ export function Band(props:Props){
     if(i>=firstCaller){stations[i].hz=0;rig.current!.activeCallers=[]}else voices[i].signal=voices[i].cq();
     setFeedback(i>=firstCaller?'El corresponsal ha dejado de llamar.':'El DX ha vuelto a llamar CQ.');
    }
+   const keyed=!ownTx.signal.finished(t);
+   if(!keyed&&afterTx.current){
+    const done=afterTx.current;afterTx.current=null;setSending(false);done();
+   }
    const strike=p.storm&&Math.random()<.025;
    stormEnvelope=p.storm?(strike?1:stormEnvelope*.65):0;
-   noiseGain.gain.setTargetAtTime(p.volume*(p.qrn/40+stormEnvelope*4),t,.008);
+   noiseGain.gain.setTargetAtTime((keyed?0:p.volume)*(p.qrn/40+stormEnvelope*4),t,.008);
    g.drawImage(screen,0,0,screen.width,screen.height-1,0,1,screen.width,screen.height-1);
    g.fillStyle='#071820';g.fillRect(0,0,screen.width,1);
    if(stormEnvelope>.05){g.fillStyle='rgba(170,211,200,'+stormEnvelope*.8+')';g.fillRect(0,0,screen.width,1)}
@@ -150,6 +157,7 @@ export function Band(props:Props){
      for(const r of callers)r.voice.signal=r.voice.send(r.station.call,0,false);
      dx.signal=dx.send('E',.5,false);
     }else if(turn.phase==='calling'){
+     if(turn.offer&&keyed)return;
      if(!callers.every(r=>r.voice.signal.finished(t)))return;
      const scores=callers.map(r=>copyLevel(r.station.power,r.station.hz-s.hz-s.split,signals.indexOf(r),t,p.qsb,p.qrn));
      turn.winner=scores[0]>=scores[1]?0:1;
@@ -174,22 +182,29 @@ export function Band(props:Props){
     }
    });
    signals.forEach(({voice:v,station:s},i)=>{
-    const offset=s.hz-p.hz;
+    const offset=s===ownStation?0:s.hz-p.hz;
     const fade=s===ownStation?1:multipath(t,i,p.qsb)*pathGain(s.path,p.hour);
     const response=1/Math.sqrt(1+Math.pow(2*offset/p.width,8));
     v.osc.frequency.setTargetAtTime(Math.max(30,p.tone+offset),t,.012);
-    v.gain.gain.setTargetAtTime(p.volume*s.power*fade*response,t,.012);
+    v.gain.gain.setTargetAtTime((keyed&&s!==ownStation?0:p.volume)*s.power*fade*response,t,.012);
     g.fillStyle='rgba(114,255,194,'+v.signal.level(t)*s.power*fade+')';
     g.fillRect((s.hz-low)/(high-low)*screen.width-2,0,5,1);
    });
   },25);
-  return ()=>{clearInterval(timer);partial.current=null;rig.current=null;signals.forEach(s=>s.voice.close());noise.stop();void ctx.close()};
+  return ()=>{clearInterval(timer);afterTx.current=null;partial.current=null;rig.current=null;signals.forEach(s=>s.voice.close());noise.stop();void ctx.close()};
  },[on]);
  function transmit(message=tx){
   const radio=rig.current;if(!radio)return;
   const words=message.trim().toUpperCase().split(/\s+/), own=call.trim().toUpperCase();
   const now=radio.ctx.currentTime;
-  if(!radio.ownTx.signal.finished(now)){setFeedback('Tu estación está transmitiendo.');return}
+  if(afterTx.current||!radio.ownTx.signal.finished(now)){setFeedback('Tu estación está transmitiendo.');return}
+  function sendThen(done:()=>void){
+   if(!radio)return;
+   radio.ownStation.hz=txHz;radio.ownStation.wpm=props.wpm;
+   radio.ownTx.signal=radio.ownTx.send(words.join(' '),0,false);
+   afterTx.current=done;setSending(true);setTx('');baseline.current=settings.current.decoded;
+   setFeedback('TX · '+words.join(' '));
+  }
   const query=words.join(' ')==='QRL?';
   if(query||words[0]==='CQ'){
    if(contact!==null||partial.current||radio.traffic.some(t=>t.offer)){setFeedback('Completa primero el intercambio en curso.');return}
@@ -198,15 +213,10 @@ export function Band(props:Props){
    if(!query&&radio.occupied(hz)){setFeedback('Frecuencia ocupada. Busca un hueco en la banda.');return}
    for(const idx of radio.activeCallers){radio.stations[idx].hz=0}
    radio.activeCallers=[];
-   radio.ownStation.hz=hz;radio.ownStation.wpm=props.wpm;
-   radio.ownTx.signal=radio.ownTx.send(words.join(' '),0,false);
-   const outgoing=radio.ownTx.signal;
-   const listen=()=>{
-    if(rig.current!==radio||radio.ownTx.signal!==outgoing)return;
-    if(!outgoing.finished(radio.ctx.currentTime)){window.setTimeout(listen,100);return}
+   sendThen(()=>{
     if(query){
      setFeedback(radio.occupied(hz)?'Frecuencia ocupada.':'Sin respuesta a QRL?. Puedes llamar CQ.');
-     if(radio.occupied(hz)){radio.ownTx.signal=radio.ownTx.send('QRL',0,false)}
+     if(radio.occupied(hz)){const idx=radio.firstCaller;radio.stations[idx].hz=hz;radio.voices[idx].signal=radio.voices[idx].send('QRL',0,false)}
      return;
     }
     const count=Math.random()<.5?1:2;
@@ -217,15 +227,15 @@ export function Band(props:Props){
      radio.activeCallers.push(idx);
     }
     setFeedback('Escucha quién te llama. Contesta con su indicativo, DE, tu indicativo y K. Para pedir una repetición, envía el prefijo seguido de ?.');
-   };
-   window.setTimeout(listen,100);setTx('');baseline.current=settings.current.decoded;
-   setFeedback(query?'Consultando la frecuencia…':'Transmitiendo CQ…');return;
+   });return;
   }
   const nearby=radio.activeCallers.filter(idx=>Math.abs(radio.stations[idx].hz-hz)<=70);
   if(contact===null&&!partial.current&&nearby.length&&/^[A-Z0-9]{1,6}\?$/.test(words.join(' '))){
    const matches=nearby.filter(idx=>radio.stations[idx].call.startsWith(words[0].slice(0,-1)));
-   for(const idx of matches)radio.voices[idx].signal=radio.voices[idx].send(radio.stations[idx].call+' K',0,false);
-   setFeedback(matches.length?'Escucha la repetición.':'Sin respuesta a ese parcial.');setTx('');return;
+   sendThen(()=>{
+    for(const idx of matches)radio.voices[idx].signal=radio.voices[idx].send(radio.stations[idx].call+' K',0,false);
+   setFeedback(matches.length?'Escucha la repetición.':'Sin respuesta a ese parcial.');
+   });return;
   }
   const currentIndex=contact??partial.current?.index;
   const index=currentIndex!=null&&Math.abs(radio.stations[currentIndex].hz-hz)<=70?currentIndex:
@@ -237,7 +247,7 @@ export function Band(props:Props){
   if(pending){
    if(index!==pending.index||own!==pending.call||!words.includes(pending.call)){setFeedback('Repite tu indicativo completo al corresponsal que pidió el parcial.');return}
    if(!v.signal.finished(time)){setFeedback('Espera a que termine la petición.');return}
-   partial.current=null;answer(v,station,index,own,false,time);
+   partial.current=null;sendThen(()=>answer(v,station,index,own,false,radio.ctx.currentTime));
   }else if(contact===null){
    const competing=turn.phase==='calling';
    if(radio.traffic.some(other=>other.offer)){setFeedback('Espera la respuesta del DX a tu llamada.');return}
@@ -246,11 +256,12 @@ export function Band(props:Props){
    if(!/^[A-Z0-9/]{3,12}$/.test(own)||words[0]!==station.call||words[1]!=='DE'||!words.slice(2,-1).includes(own)||!['K','KN'].includes(words[words.length-1]||'')){setFeedback('Sin respuesta. Comprueba los indicativos, DE y el cambio K.');return}
    const offset=txHz-station.hz-station.split;
    if(competing){
-    turn.offer={call:own,offset};setFeedback('Has llamado junto a otros operadores. Escucha a quién responde el DX.');
+    turn.offer={call:own,offset};sendThen(()=>setFeedback('Escucha a quién responde el DX.'));
    }else{
     if(index>=radio.firstCaller){for(const idx of nearby)if(idx!==index)radio.stations[idx].hz=0;radio.activeCallers=[index]}
     radio.busy.add(index);
-    answer(v,station,index,own,copyLevel(.75*pathGain(station.path,hour),offset,index,time,props.qsb,props.qrn)<1.5,time);
+    v.signal=v.send('E',.5,false);
+    sendThen(()=>answer(v,station,index,own,copyLevel(.75*pathGain(station.path,hour),offset,index,time,props.qsb,props.qrn)<1.5,radio.ctx.currentTime));
    }
   }else{
    if(index!==contact){setFeedback('Vuelve a la frecuencia del corresponsal.');return}
@@ -258,11 +269,14 @@ export function Band(props:Props){
    const request=words.join(' ').match(/^(RST|NAME|QTH)(?: AGN)?\?$/);
    if(request){
     const fields:Record<string,string>={RST:report.current,NAME:station.name,QTH:station.qth};
-    v.signal=v.send(request[1]+' '+fields[request[1]]+' KN');setTx('');baseline.current=settings.current.decoded;return;
+    v.signal=v.send('E',.5,false);
+    sendThen(()=>{v.signal=v.send(request[1]+' '+fields[request[1]]+' KN');setFeedback('RX · Repetición del corresponsal.');});return;
    }
    const sent=words.find(w=>/^[1-5][1-9][1-9]$/.test(w));
    if(!sent){setFeedback('Envía tu RST o pide RST AGN?, NAME? o QTH?.');return}
    const entry={utc:hour,km:station.path.km,rx:hz,tx:txHz,call:station.call,sent,copy:copy.trim().toUpperCase(),expected:[report.current,station.name,station.qth].join(' ')};
+   v.signal=v.send('E',.5,false);
+   sendThen(()=>{
    const rows=[entry,...log];setLog(rows);
    try{localStorage.setItem('cw-band-log',JSON.stringify(rows));setStorageError(false)}catch{setStorageError(true)}
    v.signal=v.send(own+' TU 73 SK');
@@ -270,10 +284,11 @@ export function Band(props:Props){
    const check=()=>{if(rig.current!==radio||v.signal!==farewell)return;if(farewell.listening(radio.ctx.currentTime)){if(index>=radio.firstCaller){station.hz=0;radio.activeCallers=radio.activeCallers.filter(i=>i!==index)}else v.signal=v.cq();radio.busy.delete(index)}else window.setTimeout(check,100)};
    window.setTimeout(check,100);
    setContact(null);setFeedback('QSO completado con '+station.call+'.');
+   });
   }
   setTx('');baseline.current=settings.current.decoded;
  }
- return <section className="band"><div className="row"><h3>Banda de 40 m</h3><button onClick={()=>{setOn(!on);setSplit(false);setMonitor(false);setContact(null);setFeedback('');setTx('');baseline.current=props.decoded}}>{on?'Cerrar banda':'Abrir banda'}</button></div>
+ return <section className="band"><div className="row"><h3>Banda de 40 m</h3><button onClick={()=>{setOn(!on);setSending(false);setSplit(false);setMonitor(false);setContact(null);setFeedback('');setTx('');baseline.current=props.decoded}}>{on?'Cerrar banda':'Abrir banda'}</button></div>
  <p>Pulsa sobre un trazo para sintonizar. Afina con las flechas del VFO y escucha el indicativo antes de llamar.</p>
  <label>Hora UTC simulada · {hour}:00<input type="range" min="0" max="23" value={hour} onChange={e=>setHour(+e.target.value)}/></label>
  <small>Receptor en Madrid · escenario de equinoccio. Cambia la hora para comparar los mismos trayectos.</small>
@@ -285,7 +300,7 @@ export function Band(props:Props){
  {split&&<label>Desplazamiento TX +{offset} Hz · {txHz.toLocaleString('de-DE')} Hz<input type="range" min={0} max={1500} step={10} value={offset} onChange={e=>setOffset(+e.target.value)}/></label>}
  {split&&<label><input type="checkbox" checked={monitor} onChange={e=>setMonitor(e.target.checked)}/> Escuchar en la frecuencia TX</label>}
  <fieldset className="radio-keys"><legend>Filtro CW</legend>{[100,250,500,1000].map(n=><button key={n} aria-pressed={width===n} onClick={()=>setWidth(n)}>{n} Hz</button>)}</fieldset>
- {on&&<form onSubmit={e=>{e.preventDefault();transmit()}}><label>Indicativo de operador<input className="textinput" maxLength={12} value={call} onChange={e=>props.setCall(e.target.value.toUpperCase())}/></label><label>Llamada en frecuencia<input className="textinput" value={tx} onChange={e=>setTx(e.target.value.toUpperCase())} placeholder="Indicativo DE tu indicativo K"/></label><div className="row"><button disabled={!tx.trim()}>Transmitir</button><button type="button" onClick={()=>transmit('QRL?')}>QRL?</button><button type="button" onClick={()=>transmit('CQ CQ DE '+call.trim().toUpperCase()+' K')}>Llamar CQ</button><button type="button" onClick={()=>setTx(props.decoded.startsWith(baseline.current)?props.decoded.slice(baseline.current.length).trim():props.decoded)}>Capturar paletas</button></div></form>}
+ {on&&<form onSubmit={e=>{e.preventDefault();transmit()}}><label>Indicativo de operador<input className="textinput" maxLength={12} value={call} onChange={e=>props.setCall(e.target.value.toUpperCase())}/></label><label>Llamada en frecuencia<input className="textinput" value={tx} onChange={e=>setTx(e.target.value.toUpperCase())} placeholder="Indicativo DE tu indicativo K"/></label><div className="row"><button disabled={sending||!tx.trim()}>Transmitir</button><button type="button" disabled={sending} onClick={()=>transmit('QRL?')}>QRL?</button><button type="button" disabled={sending} onClick={()=>transmit('CQ CQ DE '+call.trim().toUpperCase()+' K')}>Llamar CQ</button><button type="button" onClick={()=>setTx(props.decoded.startsWith(baseline.current)?props.decoded.slice(baseline.current.length).trim():props.decoded)}>Capturar paletas</button></div></form>}
  {contact!==null&&<label>Copia del intercambio (RST, nombre y QTH)<input className="textinput" value={copy} onChange={e=>setCopy(e.target.value)} placeholder="Puedes pedir RST AGN?, NAME? o QTH?"/></label>}
  {log.length>0&&<details><summary>Libro de guardia · {log.length}</summary>{storageError&&<p>El navegador solo ha conservado esta entrada en memoria.</p>}{log.map((r,i)=><p key={i}><strong>{r.call}</strong> · {r.utc}:00 UTC · {r.km} km · RX {r.rx} / TX {r.tx} Hz · RST enviado {r.sent}<br/>Tu copia: {r.copy||'—'} · Transmitido: {r.expected}</p>)}</details>}
  <p role="status">{feedback}</p></section>;

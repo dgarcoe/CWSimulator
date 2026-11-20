@@ -66,6 +66,7 @@ function App(){
  const [weaknesses,setWeaknesses]=useState<Record<string,number>>(()=>{try{return JSON.parse(localStorage.getItem('cw-weaknesses')||'{}')}catch{return {}}});
  useEffect(()=>{localStorage.setItem('cw-weaknesses',JSON.stringify(weaknesses))},[weaknesses]);
  const [myCall,setMyCall]=useState(()=>localStorage.getItem('cw-my-call')||'EA1ABC');
+ const [bandState,setBandState]=useState<'TX'|'RX'|null>(null);
  const [dial,setDial]=useState(7025000);
  const [qsoContact,setQsoContact]=useState(0),[qsoReveal,setQsoReveal]=useState(false),[qsoPaddleStart,setQsoPaddleStart]=useState('');
  const qsoStations=[{call:'EA1TEST',name:'ANA',qth:'VIGO',rst:'599'},{call:'F4ABC',name:'LUC',qth:'LYON',rst:'579'},{call:'DL2XYZ',name:'MAX',qth:'BONN',rst:'559'},{call:'G3MOR',name:'SAM',qth:'YORK',rst:'589'}];
@@ -346,8 +347,8 @@ function App(){
     </>}
    </div></div>}
    {page==='radio'&&<div className="content-grid radio-console">
-    <section className="panel"><div className="panel-kicker">CW · 40 m</div><h2>Transceptor CW</h2><div className="tuning-head"><div className="frequency"><span>VFO A · CW</span><strong>{dial.toLocaleString("de-DE")} <small>Hz</small></strong><span>{keys.dit||keys.dah?'TX':rxPlaying?'RX':'VFO A'} · {tone} Hz · {wpm} WPM</span></div><RadioKnob large label="Sintonía VFO" value={dial} min={7024000} max={7026500} step={10} readout={dial.toLocaleString("de-DE")+" Hz"} change={setDial}/></div>
-     <Band wpm={wpm} hz={dial} tune={setDial} setCall={setMyCall} call={myCall} tone={tone} volume={volume} qrn={qrn} qsb={qsb} decoded={decoded}/>
+    <section className="panel"><div className="panel-kicker">CW · 40 m</div><h2>Transceptor CW</h2><div className="tuning-head"><div className="frequency"><span>VFO A · CW</span><strong>{dial.toLocaleString("de-DE")} <small>Hz</small></strong><span>{keys.dit||keys.dah?'TX':(bandState??(rxPlaying?'RX':'VFO A'))} · {tone} Hz · {wpm} WPM</span></div><RadioKnob large label="Sintonía VFO" value={dial} min={7024000} max={7026500} step={10} readout={dial.toLocaleString("de-DE")+" Hz"} change={setDial}/></div>
+     <Band onState={setBandState} wpm={wpm} hz={dial} tune={setDial} setCall={setMyCall} call={myCall} tone={tone} volume={volume} qrn={qrn} qsb={qsb} decoded={decoded}/>
      <div className="radio-controls">
       <RadioKnob label="Velocidad" value={wpm} min={10} max={40} step={1} readout={wpm+' WPM'} change={setWpm}/>
       <RadioKnob label="Tono" value={tone} min={400} max={900} step={25} readout={tone+' Hz'} change={setTone}/>
