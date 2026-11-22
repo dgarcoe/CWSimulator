@@ -11,13 +11,14 @@ function spacing(wpm:number,effectiveWpm:number){
  const effectiveDot=1.2/Math.min(wpm,effectiveWpm);
  return {dot,gap:Math.max(3*dot,(60/effectiveWpm-31*dot)/19*3)};
 }
-export function timedGroups(pool:string,wpm:number,effective:number,seconds:number){
+export function timedGroups(pool:string,wpm:number,effective:number,seconds:number,groupSize=5){
+ if(!Number.isInteger(groupSize)||groupSize<1||groupSize>10)throw new RangeError("Invalid Koch group size");
  const {dot,gap}=spacing(wpm,effective);
  const groups:string[]=[];
  let elapsed=0;
  while(true){
-  let group='',duration=4*gap;
-  for(let i=0;i<5;i++){
+  let group='',duration=(groupSize-1)*gap;
+  for(let i=0;i<groupSize;i++){
    const char=pool[Math.floor(Math.random()*pool.length)],code=CW_CODES[char];
    group+=char;
    duration+=dot*(code.length-1+Array.from(code).reduce((n,c)=>n+(c==='.'?1:3),0));
@@ -26,7 +27,7 @@ export function timedGroups(pool:string,wpm:number,effective:number,seconds:numb
   if(elapsed+duration>seconds)break;
   groups.push(group);elapsed+=duration;
  }
- return {text:groups.join(' '),extraGap:(seconds-elapsed)/Math.max(1,groups.length-1)};
+ return {text:groups.join(' '),extraGap:(seconds-elapsed)/(groups.length>1?groups.length-1:Math.max(1,groupSize-1))};
 }
 export function playCw(ctx:AudioContext, message:string, wpm:number, pitch:number, volume:number,effectiveWpm=wpm, channel?:Channel,extraGap=0):Playback {
  const {dot,gap}=spacing(wpm,effectiveWpm);
@@ -40,6 +41,7 @@ export function playCw(ctx:AudioContext, message:string, wpm:number, pitch:numbe
  oscillator.connect(envelope).connect(signal).connect(ctx.destination);
  oscillator.start(t);
  const chars=message.toUpperCase().split('');
+ const letterGap=chars.includes(' ')?gap:gap+extraGap;
  for(let i=0;i<chars.length;i++){
   const ch=chars[i];
   if(ch===' '){t+=Math.max(4*dot,gap*4/3)+extraGap;continue}
@@ -55,7 +57,7 @@ export function playCw(ctx:AudioContext, message:string, wpm:number, pitch:numbe
    t+=len;
    if(j<code.length-1)t+=dot;
   }
-  if(i<chars.length-1)t+=gap;
+  if(i<chars.length-1)t+=letterGap;
  }
  let noise:AudioBufferSourceNode|undefined;
  let setChannel:Playback['setChannel'];

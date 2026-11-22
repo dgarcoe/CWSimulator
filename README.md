@@ -92,4 +92,4 @@ To originate a contact, tune to a clear frequency in simplex, press QRL? and the
 
 On the live band, direct paddle TX keys the sidetone and waterfall at the transmit frequency. Use the configured paddle inputs or the on-screen DIT/DAH levers. A pause of at least 1.4 seconds (18 dot units at slower speeds) passes the decoded turn to the operator. Turn off direct TX to practice and capture a draft instead.
 
-Koch reception sessions offer 30 seconds or 1, 2, 3 and 5 minutes of continuous five-character groups. The trainer uses the current lesson, pitch, character speed and Farnsworth spacing. Type during reception and grade the complete copy at the end; spaces and line breaks are ignored.
+Koch reception sessions offer 30 seconds or 1, 2, 3 and 5 minutes of continuous groups of 1–10 characters (default 5). The trainer uses the current lesson, pitch, character speed and Farnsworth spacing. Type during reception and grade the complete copy at the end; spaces and line breaks are ignored.
