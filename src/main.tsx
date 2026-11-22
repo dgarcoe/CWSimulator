@@ -3,7 +3,7 @@ import {Band} from './Band';
 import React, {useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import './style.css';
-import {CW_CODES,playCw,timedGroups,type Playback} from './cwPlayback';
+import {CW_CODES,playCw,standardWordGap,timedGroups,type Playback} from './cwPlayback';
 
 type Lever = 'dit'|'dah';
 const KOCH='KMURESNAPTLWI.JZ=FOY,VG5/Q92H38B?47C1D60X';
@@ -64,7 +64,8 @@ function App(){
  const [groupSize,setGroupSize]=useState(5);
  const [timedSize,setTimedSize]=useState(0);
  const [sessionSeconds,setSessionSeconds]=useState(60);
- const guidedGap=useRef(0);
+ const [addedPause,setAddedPause]=useState<number|null>(null);
+ const guidedTiming=useRef({extraGap:0,tail:0,stretchLetters:false});
  const [sessionSize,setSessionSize]=useState(10),[sessionRemaining,setSessionRemaining]=useState(0),[sessionScores,setSessionScores]=useState<number[]>([]);
  const [rawSymbols,setRawSymbols]=useState('');
  const [page,setPage]=useState<'academy'|'radio'|'hardware'>('academy');
@@ -105,7 +106,7 @@ function App(){
  function flushLetter(){if(!sequence.current)return;const pattern=sequence.current;const char=MORSE[pattern]||'?';paddleFeed.current?.(char);setRawSymbols(pattern);setDecoded(p=>p+char);sequence.current=''}
  function newExercise(){
   setTimedSize(0);
-  guidedGap.current=0;
+  guidedTiming.current={extraGap:0,tail:0,stretchLetters:false};
   stopStation();
   if(trainingMode==='receive')window.requestAnimationFrame(()=>kochAnswerRef.current?.focus());
   const pool=KOCH.slice(0,lesson);
@@ -114,7 +115,7 @@ function App(){
   if(trainingMode==='send'){sequence.current='';setDecoded('');window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current)}
   else void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,sample,trainingWpm,trainingTone,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)});
  }
- function replayExercise(){if(!target)return;stopStation();void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,target,trainingWpm,trainingTone,volumeRef.current,effectiveWpm,undefined,guidedGap.current);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
+ function replayExercise(){if(!target)return;stopStation();void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,target,trainingWpm,trainingTone,volumeRef.current,effectiveWpm,undefined,guidedTiming.current.extraGap,guidedTiming.current.tail,guidedTiming.current.stretchLetters);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
  function checkExercise(){
   if(!target||exerciseChecked||((Boolean(target)&&timedSize>0)&&rxPlaying))return;
   const actual=(trainingMode==='receive'?answer:decoded).replace(/\s/g,'').toUpperCase();
@@ -133,14 +134,14 @@ function App(){
  function startTimedSession(){
   stopStation();
   const request=stationPlaybackRequest.current;
-  const session=timedGroups(KOCH.slice(0,lesson),trainingWpm,effectiveWpm,sessionSeconds,groupSize);
+  const session=timedGroups(KOCH.slice(0,lesson),trainingWpm,effectiveWpm,sessionSeconds,groupSize,addedPause);
   setTimedSize(groupSize);
-  guidedGap.current=session.extraGap;
+  guidedTiming.current=session;
   setTarget(session.text);setAnswer('');setTrainingResult('');setExerciseChecked(false);
   setSessionRemaining(0);window.requestAnimationFrame(()=>kochAnswerRef.current?.focus());
   void initAudio().then(()=>{
    if(stationPlaybackRequest.current!==request)return;
-   const playback=playCw(audio.current!,session.text,trainingWpm,trainingTone,volumeRef.current,effectiveWpm,undefined,session.extraGap);
+   const playback=playCw(audio.current!,session.text,trainingWpm,trainingTone,volumeRef.current,effectiveWpm,undefined,session.extraGap,session.tail,session.stretchLetters);
    rxPlayback.current=playback;setRxPlaying(true);
    rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(playback.duration+.15)*1000);
   });
@@ -342,7 +343,7 @@ function App(){
       <div className="row"><button className="primary" onClick={newExercise}>{target?'Siguiente grupo':'Ejercicio libre'}</button>{target&&trainingMode==='receive'&&<button onClick={replayExercise}>Repetir sonido</button>}{target&&<button onClick={checkExercise} disabled={exerciseChecked||((Boolean(target)&&timedSize>0)&&rxPlaying)}>Comprobar</button>}</div>
       {trainingResult&&<p className="result" role="status">{trainingResult}</p>}
      </div>}
-     {trainingMode==='receive'&&<div className="guided-session"><div className="panel-kicker">SESIÓN GUIADA</div><label>Duración del ejercicio<select value={sessionSeconds} onChange={e=>setSessionSeconds(+e.target.value)}>{[30,60,120,180,300].map(n=><option key={n} value={n}>{n<60?'30 segundos':n/60+' min'}</option>)}</select></label><label>Símbolos por grupo<select value={groupSize} onChange={e=>setGroupSize(+e.target.value)}>{Array.from({length:10},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}</select></label><p>Copia los grupos mientras escuchas y comprueba el texto al terminar.</p><button onClick={startTimedSession}>Iniciar sesión por tiempo</button>{rxPlaying&&(Boolean(target)&&timedSize>0)&&<button onClick={()=>{stopStation();setTarget('');setAnswer('');setTrainingResult('')}}>Cancelar sesión</button>}</div>}
+     {trainingMode==='receive'&&<div className="guided-session"><div className="panel-kicker">SESIÓN GUIADA</div><label>Duración del ejercicio<select value={sessionSeconds} onChange={e=>setSessionSeconds(+e.target.value)}>{[30,60,120,180,300].map(n=><option key={n} value={n}>{n<60?'30 segundos':n/60+' min'}</option>)}</select></label><label>Símbolos por grupo<select value={groupSize} onChange={e=>setGroupSize(+e.target.value)}>{Array.from({length:10},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}</select></label><label>Pausa entre grupos<select value={addedPause??'auto'} onChange={e=>setAddedPause(e.target.value==='auto'?null:Number(e.target.value))}><option value="auto">Automática · ajustar a la duración</option>{[0,.25,.5,1,2,3].map(n=><option key={n} value={n}>{(standardWordGap(trainingWpm,effectiveWpm)+n).toLocaleString('es-ES',{maximumFractionDigits:2})} s · {n===0?'estándar':'+'+n.toLocaleString('es-ES')+' s'}</option>)}</select></label><p>Copia los grupos mientras escuchas y comprueba el texto al terminar.</p><button onClick={startTimedSession}>Iniciar sesión por tiempo</button>{rxPlaying&&(Boolean(target)&&timedSize>0)&&<button onClick={()=>{stopStation();setTarget('');setAnswer('');setTrainingResult('')}}>Cancelar sesión</button>}</div>}
      {trainingMode==='send'&&<div className="guided-session"><div className="panel-kicker">SESIÓN GUIADA</div><label>Ejercicios por sesión <select value={sessionSize} onChange={e=>setSessionSize(+e.target.value)}><option value={5}>5</option><option value={10}>10</option><option value={20}>20</option></select></label><div className="row"><button onClick={startSession}>Iniciar sesión</button>{sessionRemaining>0&&<button onClick={()=>setSessionRemaining(0)}>Terminar sesión</button>}</div>{sessionRemaining>0&&<p role="status">Quedan {sessionRemaining} ejercicios. Después de comprobar cada respuesta, pulsa «Siguiente grupo».</p>}{sessionScores.length>0&&<p>Sesión: {sessionScores.length} completados · {Math.round(sessionScores.reduce((a,b)=>a+b,0)/sessionScores.length)}% de precisión media{sessionRemaining===0?' · Finalizada':''}</p>}</div>}
     </section>
     <section className="panel settings-panel"><div className="panel-kicker">02 / AJUSTES DE LA SESIÓN</div><h2>Tu ritmo</h2>

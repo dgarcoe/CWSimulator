@@ -11,7 +11,10 @@ function spacing(wpm:number,effectiveWpm:number){
  const effectiveDot=1.2/Math.min(wpm,effectiveWpm);
  return {dot,gap:Math.max(3*dot,(60/effectiveWpm-31*dot)/19*3)};
 }
-export function timedGroups(pool:string,wpm:number,effective:number,seconds:number,groupSize=5){
+export function standardWordGap(wpm:number,effective:number){
+ return spacing(wpm,effective).gap*7/3;
+}
+export function timedGroups(pool:string,wpm:number,effective:number,seconds:number,groupSize=5,addedPause:number|null=null){
  if(!Number.isInteger(groupSize)||groupSize<1||groupSize>10)throw new RangeError("Invalid Koch group size");
  const {dot,gap}=spacing(wpm,effective);
  const groups:string[]=[];
@@ -23,13 +26,15 @@ export function timedGroups(pool:string,wpm:number,effective:number,seconds:numb
    group+=char;
    duration+=dot*(code.length-1+Array.from(code).reduce((n,c)=>n+(c==='.'?1:3),0));
   }
-  if(groups.length)duration+=gap*7/3;
+  if(groups.length)duration+=gap*7/3+(addedPause??0);
   if(elapsed+duration>seconds)break;
   groups.push(group);elapsed+=duration;
  }
- return {text:groups.join(' '),extraGap:(seconds-elapsed)/(groups.length>1?groups.length-1:Math.max(1,groupSize-1))};
+ const remaining=Math.max(0,seconds-elapsed);
+ return {text:groups.join(' '),extraGap:addedPause??remaining/(groups.length>1?groups.length-1:Math.max(1,groupSize-1)),
+  tail:addedPause===null?0:remaining,stretchLetters:addedPause===null};
 }
-export function playCw(ctx:AudioContext, message:string, wpm:number, pitch:number, volume:number,effectiveWpm=wpm, channel?:Channel,extraGap=0):Playback {
+export function playCw(ctx:AudioContext, message:string, wpm:number, pitch:number, volume:number,effectiveWpm=wpm, channel?:Channel,extraGap=0,tail=0,stretchLetters=true):Playback {
  const {dot,gap}=spacing(wpm,effectiveWpm);
  let t=ctx.currentTime+0.08;
  const start=t;
@@ -41,7 +46,7 @@ export function playCw(ctx:AudioContext, message:string, wpm:number, pitch:numbe
  oscillator.connect(envelope).connect(signal).connect(ctx.destination);
  oscillator.start(t);
  const chars=message.toUpperCase().split('');
- const letterGap=chars.includes(' ')?gap:gap+extraGap;
+ const letterGap=stretchLetters&&!chars.includes(' ')?gap+extraGap:gap;
  for(let i=0;i<chars.length;i++){
   const ch=chars[i];
   if(ch===' '){t+=Math.max(4*dot,gap*4/3)+extraGap;continue}
@@ -59,6 +64,7 @@ export function playCw(ctx:AudioContext, message:string, wpm:number, pitch:numbe
   }
   if(i<chars.length-1)t+=letterGap;
  }
+ t+=tail;
  let noise:AudioBufferSourceNode|undefined;
  let setChannel:Playback['setChannel'];
  if(channel){
