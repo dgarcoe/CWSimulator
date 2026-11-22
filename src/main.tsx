@@ -1,3 +1,4 @@
+import {alignCopy,type CopyMark} from './copyReview';
 import {RadioKnob} from './RadioKnob';
 import {Band} from './Band';
 import React, {useEffect,useRef,useState} from 'react';
@@ -71,9 +72,11 @@ function App(){
  const [page,setPage]=useState<'academy'|'radio'|'hardware'>('academy');
  const [wpm,setWpm]=useState(20),[tone,setTone]=useState(700),[volume,setVolume]=useState(.2),[mode,setMode]=useState<'A'|'B'>('B');
  const [status,setStatus]=useState('Sin conectar'),[events,setEvents]=useState<string[]>([]),[decoded,setDecoded]=useState(''),[keys,setKeys]=useState<Record<Lever,boolean>>({dit:false,dah:false});
+ const timedAnswerRef=useRef<HTMLTextAreaElement>(null);
+ const [marks,setMarks]=useState<CopyMark[]>([]);
  const kochAnswerRef=useRef<HTMLInputElement|null>(null);
  const [lesson,setLesson]=useState(savedKochCount),[trainingMode,setTrainingMode]=useState<'receive'|'send'|'machine'>('receive'),[trainingWpm,setTrainingWpm]=useState(20),[effectiveWpm,setEffectiveWpm]=useState(8),[target,setTarget]=useState(''),[answer,setAnswer]=useState(''),[trainingResult,setTrainingResult]=useState(''),[correct,setCorrect]=useState(0),[attempts,setAttempts]=useState(0);
- const [history,setHistory]=useState<{mode:string;lesson:number;lcwo?:boolean;score:number;target?:string;actual?:string;date?:string}[]>(()=>{try{return JSON.parse(localStorage.getItem('cw-academy-history')||'[]')}catch{return []}});
+ const [history,setHistory]=useState<{mode:string;lesson:number;lcwo?:boolean;errors?:string[];score:number;target?:string;actual?:string;date?:string}[]>(()=>{try{return JSON.parse(localStorage.getItem('cw-academy-history')||'[]')}catch{return []}});
  const [autoAdvance,setAutoAdvance]=useState(true);
  const [exerciseChecked,setExerciseChecked]=useState(false);
  useEffect(()=>{localStorage.setItem('cw-lcwo-count',String(lesson))},[lesson]);
@@ -120,16 +123,18 @@ function App(){
   if(!target||exerciseChecked||((Boolean(target)&&timedSize>0)&&rxPlaying))return;
   const actual=(trainingMode==='receive'?answer:decoded).replace(/\s/g,'').toUpperCase();
   const expected=target.replace(/\s/g,'');
-  const count=Array.from(expected).filter((ch,i)=>ch===actual[i]).length;
-  const score=Math.round(100*count/Math.max(expected.length,actual.length));
+  const review=alignCopy(expected,actual);
+  setMarks(review);
+  const count=review.filter(mark=>mark.kind==='hit').length;
+  const score=Math.round(100*count/review.length);
   setAttempts(p=>p+1);if(score===100)setCorrect(p=>p+1);setExerciseChecked(true);
-  const updated=[...history,{mode:trainingMode,lesson,lcwo:true,score,target:expected,actual,date:new Date().toISOString()}].slice(-100);
+  const updated=[...history,{mode:trainingMode,lesson,lcwo:true,errors:review.filter(m=>m.kind!=='hit').map(m=>(m.expected||'∅')+' → '+(m.actual||'∅')),score,target:expected,actual,date:new Date().toISOString()}].slice(-100);
   setHistory(updated);
   if(sessionRemaining>0){setSessionScores(p=>[...p,score]);setSessionRemaining(p=>p-1)}
-  setWeaknesses(prev=>{const next={...prev};for(let i=0;i<expected.length;i++){const ch=expected[i];next[ch]=Math.max(0,(next[ch]||0)+(actual[i]===ch?-0.25:1))}return next});
+  setWeaknesses(prev=>{const next={...prev};for(const mark of review){const ch=mark.expected;if(!ch)continue;next[ch]=Math.max(0,(next[ch]||0)+(mark.kind==='hit'?-0.25:1))}return next});
   const recent=updated.filter(h=>h.lcwo&&h.lesson===lesson&&h.mode===trainingMode).slice(-10);
-  if(autoAdvance&&recent.length===10&&recent.reduce((a,h)=>a+h.score,0)/10>=90&&lesson<KOCH.length){setLesson(p=>p+1);setTrainingResult('Lección superada. Nuevo carácter desbloqueado. '+score+'% · esperado: '+target+' · recibido: '+(actual||'—'));return}
-  setTrainingResult(score+'% de coincidencia · esperado: '+target+' · recibido: '+(actual||'—'));
+  if(autoAdvance&&recent.length===10&&recent.reduce((a,h)=>a+h.score,0)/10>=90&&lesson<KOCH.length){setLesson(p=>p+1);setTrainingResult('Lección superada. Nuevo carácter desbloqueado. '+score+'%');return}
+  setTrainingResult(score+'% de coincidencia');
  }
  function startTimedSession(){
   stopStation();
@@ -138,7 +143,7 @@ function App(){
   setTimedSize(groupSize);
   guidedTiming.current=session;
   setTarget(session.text);setAnswer('');setTrainingResult('');setExerciseChecked(false);
-  setSessionRemaining(0);window.requestAnimationFrame(()=>kochAnswerRef.current?.focus());
+  setSessionRemaining(0);window.requestAnimationFrame(()=>timedAnswerRef.current?.focus());
   void initAudio().then(()=>{
    if(stationPlaybackRequest.current!==request)return;
    const playback=playCw(audio.current!,session.text,trainingWpm,trainingTone,volumeRef.current,effectiveWpm,undefined,session.extraGap,session.tail,session.stretchLetters);
@@ -190,7 +195,7 @@ function App(){
  const machineCurrentStreak=machineStreak===-1?machineLog.length:machineStreak;
  const machineByChar=KOCH.slice(0,lesson).split('').map(ch=>{const entries=machineLog.filter(x=>x.expected===ch);return {ch,total:entries.length,accuracy:entries.length?Math.round(100*entries.filter(x=>x.correct).length/entries.length):0,avg:entries.filter(x=>x.correct).length?Math.round(entries.filter(x=>x.correct).reduce((sum,x)=>sum+x.ms,0)/entries.filter(x=>x.correct).length):0}}).filter(x=>x.total).sort((a,b)=>a.accuracy-b.accuracy||b.avg-a.avg);
  const confusions:Record<string,number>={};
- for(const h of history){if(!h.target||h.actual===undefined)continue;for(let i=0;i<h.target.length;i++){const expected: string = h.target.charAt(i);const got: string = h.actual.charAt(i) || '∅';if(expected!==got){const key=expected+' → '+got;confusions[key]=(confusions[key]||0)+1}}}
+ for(const h of history){if(h.errors){for(const key of h.errors)confusions[key]=(confusions[key]||0)+1;continue}if(!h.target||h.actual===undefined)continue;for(let i=0;i<h.target.length;i++){const expected: string = h.target.charAt(i);const got: string = h.actual.charAt(i) || '∅';if(expected!==got){const key=expected+' → '+got;confusions[key]=(confusions[key]||0)+1}}}
  const topConfusions=Object.entries(confusions).sort((a,b)=>b[1]-a[1]).slice(0,8);
  function scheduleSpacing(dot:number){
   window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current);
@@ -338,10 +343,12 @@ function App(){
       <span className="eyebrow">{trainingMode==='receive'?((Boolean(target)&&timedSize>0)?'RECEPCIÓN / GRUPOS DE '+timedSize:'RECEPCIÓN / 5 CARACTERES'):'ENVÍO / 5 CARACTERES'}</span>
       <div className="exercise-target">{!target?'LISTO':trainingMode==='receive'?'♫  ♫  ♫':target}</div>
       <p className="muted">{!target?'Prepara tus auriculares y empieza una sesión.':trainingMode==='receive'?'Escucha el grupo completo y escribe lo que has reconocido.':'Transmite el grupo con tus paletas; luego comprueba el resultado.'}</p>
-      {(Boolean(target)&&timedSize>0)&&trainingMode==='receive'&&<textarea autoFocus className="textinput answer" aria-label="Copia de la sesión" rows={4} value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} placeholder="Escribe aquí los grupos que escuches"/>}
-      {target&&!(Boolean(target)&&timedSize>0)&&trainingMode==='receive'&&<input ref={kochAnswerRef} className="textinput answer" aria-label="Respuesta escuchada" onKeyDown={e=>{if(e.key==="Enter"&&!e.repeat){e.preventDefault();if(exerciseChecked)newExercise();else checkExercise()}}} autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} maxLength={10} placeholder="Escribe lo que escuchas · Enter para comprobar / continuar"/>}
+      {(Boolean(target)&&timedSize>0)&&trainingMode==='receive'&&<textarea ref={timedAnswerRef} readOnly={exerciseChecked} maxLength={target.length*3+100} className="textinput answer" aria-label="Copia de la sesión" rows={4} value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} placeholder="Escribe aquí los grupos que escuches"/>}
+      {target&&!(Boolean(target)&&timedSize>0)&&trainingMode==='receive'&&<input readOnly={exerciseChecked} ref={kochAnswerRef} className="textinput answer" aria-label="Respuesta escuchada" onKeyDown={e=>{if(e.key==="Enter"&&!e.repeat){e.preventDefault();if(exerciseChecked)newExercise();else checkExercise()}}} autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} maxLength={10} placeholder="Escribe lo que escuchas · Enter para comprobar / continuar"/>}
       <div className="row"><button className="primary" onClick={newExercise}>{target?'Siguiente grupo':'Ejercicio libre'}</button>{target&&trainingMode==='receive'&&<button onClick={replayExercise}>Repetir sonido</button>}{target&&<button onClick={checkExercise} disabled={exerciseChecked||((Boolean(target)&&timedSize>0)&&rxPlaying)}>Comprobar</button>}</div>
-      {trainingResult&&<p className="result" role="status">{trainingResult}</p>}
+      {trainingResult&&<div className="result"><p role="status">{trainingResult}</p>
+       <div className="copy-review">{marks.map((m,i)=><span key={i} className={'copy-'+m.kind}>{m.kind==='changed'?m.actual+'→'+m.expected:m.kind==='missing'?'+'+m.expected:m.kind==='extra'?'−'+m.actual:m.actual}</span>)}</div>
+       <small>✓ Acierto · A→B: copiaste A y sonaba B · +B: faltaba B · −A: sobraba A</small></div>}
      </div>}
      {trainingMode==='receive'&&<div className="guided-session"><div className="panel-kicker">SESIÓN GUIADA</div><label>Duración del ejercicio<select value={sessionSeconds} onChange={e=>setSessionSeconds(+e.target.value)}>{[30,60,120,180,300].map(n=><option key={n} value={n}>{n<60?'30 segundos':n/60+' min'}</option>)}</select></label><label>Símbolos por grupo<select value={groupSize} onChange={e=>setGroupSize(+e.target.value)}>{Array.from({length:10},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}</select></label><label>Pausa entre grupos<select value={addedPause??'auto'} onChange={e=>setAddedPause(e.target.value==='auto'?null:Number(e.target.value))}><option value="auto">Automática · ajustar a la duración</option>{[0,.25,.5,1,2,3].map(n=><option key={n} value={n}>{(standardWordGap(trainingWpm,effectiveWpm)+n).toLocaleString('es-ES',{maximumFractionDigits:2})} s · {n===0?'estándar':'+'+n.toLocaleString('es-ES')+' s'}</option>)}</select></label><p>Copia los grupos mientras escuchas y comprueba el texto al terminar.</p><button onClick={startTimedSession}>Iniciar sesión por tiempo</button>{rxPlaying&&(Boolean(target)&&timedSize>0)&&<button onClick={()=>{stopStation();setTarget('');setAnswer('');setTrainingResult('')}}>Cancelar sesión</button>}</div>}
      {trainingMode==='send'&&<div className="guided-session"><div className="panel-kicker">SESIÓN GUIADA</div><label>Ejercicios por sesión <select value={sessionSize} onChange={e=>setSessionSize(+e.target.value)}><option value={5}>5</option><option value={10}>10</option><option value={20}>20</option></select></label><div className="row"><button onClick={startSession}>Iniciar sesión</button>{sessionRemaining>0&&<button onClick={()=>setSessionRemaining(0)}>Terminar sesión</button>}</div>{sessionRemaining>0&&<p role="status">Quedan {sessionRemaining} ejercicios. Después de comprobar cada respuesta, pulsa «Siguiente grupo».</p>}{sessionScores.length>0&&<p>Sesión: {sessionScores.length} completados · {Math.round(sessionScores.reduce((a,b)=>a+b,0)/sessionScores.length)}% de precisión media{sessionRemaining===0?' · Finalizada':''}</p>}</div>}
