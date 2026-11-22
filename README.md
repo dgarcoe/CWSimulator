@@ -89,3 +89,7 @@ The live band uses an illustrative equinox scenario with a receiver in Madrid. T
 During a contact, enter the received RST, name and QTH in the copy field. Send RST AGN?, NAME? or QTH? in the listening gap for a selective repeat. Sending a valid RST closes the exchange and saves the simulated UTC hour, distance, RX/TX frequencies, sent RST, copied exchange and transmitted reference in the local logbook.
 
 To originate a contact, tune to a clear frequency in simplex, press QRL? and then Llamar CQ. Listen for one or two callers. A partial such as G3? requests a repeat from matching stations. Answer the chosen caller with its callsign, DE, your callsign and K, then complete and log the exchange as usual.
+
+On the live band, direct paddle TX keys the sidetone and waterfall at the transmit frequency. Use the configured paddle inputs or the on-screen DIT/DAH levers. A pause of at least 1.4 seconds (18 dot units at slower speeds) passes the decoded turn to the operator. Turn off direct TX to practice and capture a draft instead.
+
+Koch reception sessions offer 30 seconds or 1, 2, 3 and 5 minutes of continuous five-character groups. The trainer uses the current lesson, pitch, character speed and Farnsworth spacing. Type during reception and grade the complete copy at the end; spaces and line breaks are ignored.

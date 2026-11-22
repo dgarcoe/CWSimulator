@@ -1,4 +1,4 @@
-export const CW_CODES: Record<string,string> = {'?':'..--..',A:'.-',B:'-...',C:'-.-.',D:'-..',E:'.',F:'..-.',G:'--.',H:'....',I:'..',J:'.---',K:'-.-',L:'.-..',M:'--',N:'-.',O:'---',P:'.--.',Q:'--.-',R:'.-.',S:'...',T:'-',U:'..-',V:'...-',W:'.--',X:'-..-',Y:'-.--',Z:'--..',0:'-----',1:'.----',2:'..---',3:'...--',4:'....-',5:'.....',6:'-....',7:'--...',8:'---..',9:'----.'};
+export const CW_CODES: Record<string,string> = {'/':'-..-.','?':'..--..',A:'.-',B:'-...',C:'-.-.',D:'-..',E:'.',F:'..-.',G:'--.',H:'....',I:'..',J:'.---',K:'-.-',L:'.-..',M:'--',N:'-.',O:'---',P:'.--.',Q:'--.-',R:'.-.',S:'...',T:'-',U:'..-',V:'...-',W:'.--',X:'-..-',Y:'-.--',Z:'--..',0:'-----',1:'.----',2:'..---',3:'...--',4:'....-',5:'.....',6:'-....',7:'--...',8:'---..',9:'----.'};
 type Channel={qrn:number;qsb:number};
 export function fading(time:number,path:number,depth:number){
  const phase=time*(1.5+path*.13)+path;
@@ -6,10 +6,30 @@ export function fading(time:number,path:number,depth:number){
  return 10**(-32*(depth/100)*dip/20);
 }
 export type Playback = {stop:()=>void; duration:number;setChannel?:(value:Channel)=>void};
-export function playCw(ctx:AudioContext, message:string, wpm:number, pitch:number, volume:number,effectiveWpm=wpm, channel?:Channel):Playback {
+function spacing(wpm:number,effectiveWpm:number){
  const dot=1.2/wpm;
  const effectiveDot=1.2/Math.min(wpm,effectiveWpm);
- const gap=Math.max(3*dot,(60/effectiveWpm-31*dot)/19*3);
+ return {dot,gap:Math.max(3*dot,(60/effectiveWpm-31*dot)/19*3)};
+}
+export function timedGroups(pool:string,wpm:number,effective:number,seconds:number){
+ const {dot,gap}=spacing(wpm,effective);
+ const groups:string[]=[];
+ let elapsed=0;
+ while(true){
+  let group='',duration=4*gap;
+  for(let i=0;i<5;i++){
+   const char=pool[Math.floor(Math.random()*pool.length)],code=CW_CODES[char];
+   group+=char;
+   duration+=dot*(code.length-1+Array.from(code).reduce((n,c)=>n+(c==='.'?1:3),0));
+  }
+  if(groups.length)duration+=gap*7/3;
+  if(elapsed+duration>seconds)break;
+  groups.push(group);elapsed+=duration;
+ }
+ return {text:groups.join(' '),extraGap:(seconds-elapsed)/Math.max(1,groups.length-1)};
+}
+export function playCw(ctx:AudioContext, message:string, wpm:number, pitch:number, volume:number,effectiveWpm=wpm, channel?:Channel,extraGap=0):Playback {
+ const {dot,gap}=spacing(wpm,effectiveWpm);
  let t=ctx.currentTime+0.08;
  const start=t;
  const oscillator=ctx.createOscillator();
@@ -22,7 +42,7 @@ export function playCw(ctx:AudioContext, message:string, wpm:number, pitch:numbe
  const chars=message.toUpperCase().split('');
  for(let i=0;i<chars.length;i++){
   const ch=chars[i];
-  if(ch===' '){t+=Math.max(4*dot,gap*4/3);continue}
+  if(ch===' '){t+=Math.max(4*dot,gap*4/3)+extraGap;continue}
   const code=CW_CODES[ch];
   if(!code)continue;
   for(let j=0;j<code.length;j++){
