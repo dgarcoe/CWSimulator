@@ -65,7 +65,7 @@ type Turn={phase:string;next:number;winner:number;offer?:{call:string;offset:num
 function copyLevel(power:number,offset:number,path:number,time:number,qsb:number,qrn:number){
  return power*multipath(time,path,qsb)/(1+(offset/65)**2)/(.12+qrn/180);
 }
-type Props={setQrn:(n:number)=>void;setQsb:(n:number)=>void;setLever:(lever:'dit'|'dah',down:boolean)=>void;paddleFeed:{current:((event:boolean|string)=>void)|null};onState:(state:'RX'|'TX'|null)=>void;wpm:number;hz:number;tune:(n:number)=>void;tone:number;volume:number;qrn:number;qsb:number;call:string;setCall:(call:string)=>void;decoded:string};
+type Props={children:React.ReactNode;setQrn:(n:number)=>void;setQsb:(n:number)=>void;setLever:(lever:'dit'|'dah',down:boolean)=>void;paddleFeed:{current:((event:boolean|string)=>void)|null};onState:(state:'RX'|'TX'|null)=>void;wpm:number;hz:number;tune:(n:number)=>void;tone:number;volume:number;qrn:number;qsb:number;call:string;setCall:(call:string)=>void;decoded:string};
 export function Band(props:Props){
  const {hz,tune,call}=props;
  const [on,setOn]=useState(false),[width,setWidth]=useState(500),[tx,setTx]=useState(''),[feedback,setFeedback]=useState(''),[contact,setContact]=useState<number|null>(null);
@@ -341,7 +341,7 @@ export function Band(props:Props){
  {on&&showSpeeds&&<div className="scope-markers" aria-label="Velocidades de las estaciones">{spots.map((s,i)=><span key={s.hz+'-'+s.wpm} style={{left:'clamp(25px, '+((s.hz-low)/(high-low)*100)+'%, calc(100% - 25px))',top:2+(i%3)*16}}>{s.wpm} WPM</span>)}</div>}
  <canvas key={on?'live':'idle'} ref={canvas} width="900" height="246" aria-label="Espectro y waterfall de la banda simulada"/><i style={{left:((split&&monitor?txHz:hz)-low)/(high-low)*100+'%',width:width/(high-low)*100+'%'}}/>{split&&txHz>=low&&txHz<=high&&<b className="tx-marker" style={{left:(txHz-low)/(high-low)*100+'%'}}>TX</b>}</div>
  <div className="band-scale"><span>7.024,0 kHz</span><span>7.026,5 kHz</span></div>
- <div className="scope-controls"><RadioKnob label="Ruido QRN" value={props.qrn} min={0} max={100} step={1} readout={props.qrn+'%'} change={props.setQrn}/><RadioKnob label="Desvanecimiento QSB" value={props.qsb} min={0} max={100} step={1} readout={props.qsb+'%'} change={props.setQsb}/> <fieldset className="radio-keys"><legend>Filtro CW</legend>{[100,250,500,1000].map(n=><button key={n} aria-pressed={width===n} onClick={()=>setWidth(n)}>{n} Hz</button>)}</fieldset></div>
+ <div className="scope-controls"><RadioKnob label="Ruido QRN" value={props.qrn} min={0} max={100} step={1} readout={props.qrn+'%'} change={props.setQrn}/><RadioKnob label="Desvanecimiento QSB" value={props.qsb} min={0} max={100} step={1} readout={props.qsb+'%'} change={props.setQsb}/> <fieldset className="radio-keys"><legend>Filtro CW</legend>{[100,250,500,1000].map(n=><button key={n} aria-pressed={width===n} onClick={()=>setWidth(n)}>{n} Hz</button>)}</fieldset>{props.children}</div>
  <details className="channel-options"><summary>Condiciones de propagación</summary>
  <label>Hora UTC simulada · {hour}:00<input type="range" min="0" max="23" value={hour} onChange={e=>setHour(+e.target.value)}/></label>
  <small>Receptor en Madrid · escenario de equinoccio. Cambia la hora para comparar los mismos trayectos.</small>

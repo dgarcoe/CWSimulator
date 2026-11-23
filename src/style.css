@@ -283,3 +283,7 @@ footer{margin-top:20px;padding:13px 0}
 .channel-options{margin:.75rem 0}
 .channel-options summary{cursor:pointer;width:fit-content}
 @media(max-width:560px){.scope-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}.scope-controls .radio-keys{grid-column:1/-1;margin:0}}
+.scope-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,100px),1fr));gap:12px;align-items:center}
+.scope-controls .radio-keys{margin:0;grid-column:auto}
+.scope-controls .radio-keys:first-of-type{grid-column:span 2}
+@media(max-width:560px){.scope-controls{grid-template-columns:repeat(3,minmax(0,1fr))}.scope-controls .radio-knob{grid-row:auto}.scope-controls .radio-keys:first-of-type{grid-row:3}}
