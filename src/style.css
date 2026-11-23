@@ -268,3 +268,7 @@ footer{margin-top:20px;padding:13px 0}
 .copy-changed{color:#782225;background:#ffdddd}
 .copy-missing{color:#674000;background:#ffe4aa}
 .copy-extra{color:#3e307a;background:#e7e0ff}
+.copy-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:.8rem 1rem;list-style:none;margin:1rem 0 0;padding:.8rem 0 0;border-top:1px solid currentColor}
+.copy-legend li{display:flex;align-items:flex-start;gap:.6rem;font-size:.875rem;line-height:1.4}
+.copy-legend code{flex:none;min-width:3.2em;padding:.18em .35em;border-radius:3px;text-align:center;font:600 1rem monospace}
+.copy-legend strong{display:block}
