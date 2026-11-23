@@ -5,9 +5,9 @@ import {pathFromMadrid,pathGain,multipath} from './propagation';
 
 const low=7024000, high=7026500;
 const channels=[
- {split:0,prefix:'EA1',hz:7024670,wpm:15,power:.8,name:'ANA',qth:'VIGO',path:pathFromMadrid(42.24,-8.72)},
- {split:1000,prefix:'F4',hz:7024890,wpm:21,power:.55,name:'LUC',qth:'LYON',path:pathFromMadrid(45.76,4.84)},
- {split:500,prefix:'DL2',hz:7025940,wpm:25,power:.35,name:'MAX',qth:'BONN',path:pathFromMadrid(50.74,7.10)}
+ {split:0,prefix:'EA1',wpm:15,power:.8,name:'ANA',qth:'VIGO',path:pathFromMadrid(42.24,-8.72)},
+ {split:1000,prefix:'F4',wpm:21,power:.55,name:'LUC',qth:'LYON',path:pathFromMadrid(45.76,4.84)},
+ {split:500,prefix:'DL2',wpm:25,power:.35,name:'MAX',qth:'BONN',path:pathFromMadrid(50.74,7.10)}
 ];
 function makeStations(){
  const used=new Set<string>();
@@ -16,7 +16,11 @@ function makeStations(){
   do{call=prefix+Array.from({length:3},()=>String.fromCharCode(65+Math.floor(Math.random()*26))).join('')}while(used.has(call));
   used.add(call);return call;
  }
- return channels.map(channel=>({...channel,call:callsign(channel.prefix),rivals:[callsign('G3'),callsign('I2')]}));
+ // Keep two nearby CQ signals and reserve room for the split callers.
+ const slot=(min:number,max:number)=>10*(min+Math.floor(Math.random()*(max-min+1)));
+ const base=low+slot(12,46);
+ const frequencies=[base,base+slot(19,30),low+slot(188,195)];
+ return channels.map((channel,i)=>({...channel,hz:frequencies[i],call:callsign(channel.prefix),rivals:[callsign('G3'),callsign('I2')]}));
 }
 type Station=ReturnType<typeof makeStations>[number];
 function message(ctx:AudioContext,text:string,wpm:number,pause:number){
@@ -92,6 +96,7 @@ export function Band(props:Props){
   };
   return ()=>{props.paddleFeed.current=null};
  },[on,direct,hz,txHz,props.paddleFeed]);
+ const [spots,setSpots]=useState<{hz:number;wpm:number}[]>([]);
  const canvas=useRef<HTMLCanvasElement>(null), rig=useRef<{ctx:AudioContext;voices:Voice[];stations:Station[];traffic:Turn[];busy:Set<number>;firstCaller:number;ownTx:Voice;ownStation:Station;activeCallers:number[];occupied:(hz:number)=>boolean}|null>(null);
  const [hour,setHour]=useState(17),[storm,setStorm]=useState(false);
  const [copy,setCopy]=useState('');
@@ -149,6 +154,7 @@ export function Band(props:Props){
   void ctx.resume().catch(()=>{if(rig.current?.ctx===ctx){setFeedback('No se pudo activar el audio. Vuelve a abrir la banda.');setOn(false)}});
   const screen=canvas.current!,g=screen.getContext('2d')!;
   g.fillStyle='#071820';g.fillRect(0,0,screen.width,screen.height);
+  let lastSpotScan=-1,spotSignature='';
   let stormEnvelope=0;
   const timer=window.setInterval(()=>{
    const p=settings.current,t=ctx.currentTime;
@@ -207,6 +213,14 @@ export function Band(props:Props){
      dx.signal=dx.cq();busy.delete(i);turn.phase='idle';turn.next=t+35+Math.random()*20;
     }
    });
+   if(t-lastSpotScan>=.25){
+    lastSpotScan=t;
+    const visible=signals.filter(({station,voice},i)=>station!==ownStation&&station.hz>=low&&station.hz<=high&&
+     (i<firstCaller||!voice.signal.finished(t)||rig.current?.activeCallers.some(idx=>stations[idx]===station)));
+    const entries=visible.map(({station})=>({hz:station.hz,wpm:station.wpm})).sort((a,b)=>a.hz-b.hz);
+    const signature=entries.map(s=>s.hz+'-'+s.wpm).join(',');
+    if(signature!==spotSignature){spotSignature=signature;setSpots(entries)}
+   }
    signals.forEach(({voice:v,station:s},i)=>{
     const manualTrace=s===ownStation&&m.active;
     const frequency=manualTrace?m.tx:s.hz;
@@ -319,7 +333,7 @@ export function Band(props:Props){
   }
   setTx('');baseline.current=settings.current.decoded;
  }
- return <section className="band"><div className="row"><h3>Banda de 40 m</h3><button onClick={()=>{setOn(!on);setSending(false);setSplit(false);setMonitor(false);setContact(null);setFeedback('');setTx('');baseline.current=props.decoded}}>{on?'Cerrar banda':'Abrir banda'}</button></div>
+ return <section className="band"><div className="row"><h3>Banda de 40 m</h3><button onClick={()=>{setSpots([]);setOn(!on);setSending(false);setSplit(false);setMonitor(false);setContact(null);setFeedback('');setTx('');baseline.current=props.decoded}}>{on?'Cerrar banda':'Abrir banda'}</button></div>
  <p>Pulsa sobre un trazo para sintonizar. Afina con las flechas del VFO y escucha el indicativo antes de llamar.</p>
  <label>Hora UTC simulada · {hour}:00<input type="range" min="0" max="23" value={hour} onChange={e=>setHour(+e.target.value)}/></label>
  <small>Receptor en Madrid · escenario de equinoccio. Cambia la hora para comparar los mismos trayectos.</small>
@@ -327,6 +341,7 @@ export function Band(props:Props){
  <div className="band-scope" onPointerDown={e=>{const r=e.currentTarget.getBoundingClientRect();tune(Math.max(low,Math.min(high,Math.round(low+(e.clientX-r.left)/r.width*(high-low)))))}}>
  <canvas ref={canvas} width="900" height="144" aria-label="Waterfall de la banda simulada"/><i style={{left:((split&&monitor?txHz:hz)-low)/(high-low)*100+'%',width:width/(high-low)*100+'%'}}/>{split&&txHz>=low&&txHz<=high&&<b className="tx-marker" style={{left:(txHz-low)/(high-low)*100+'%'}}>TX</b>}</div>
  <div className="band-scale"><span>7.024,0 kHz</span><span>7.026,5 kHz</span></div>
+ {on&&<div className="band-speeds" aria-label="Velocidades de las estaciones">{spots.map(s=><span key={s.hz+'-'+s.wpm}><b>{s.wpm} WPM</b> · {(s.hz/1000).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})} kHz</span>)}</div>}
  <label><input type="checkbox" checked={split} onChange={e=>setSplit(e.target.checked)}/> Split · TX independiente</label>
  {split&&<label>Desplazamiento TX +{offset} Hz · {txHz.toLocaleString('de-DE')} Hz<input type="range" min={0} max={1500} step={10} value={offset} onChange={e=>setOffset(+e.target.value)}/></label>}
  {split&&<label><input type="checkbox" checked={monitor} onChange={e=>setMonitor(e.target.checked)}/> Escuchar en la frecuencia TX</label>}

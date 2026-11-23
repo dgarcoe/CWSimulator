@@ -272,3 +272,5 @@ footer{margin-top:20px;padding:13px 0}
 .copy-legend li{display:flex;align-items:flex-start;gap:.6rem;font-size:.875rem;line-height:1.4}
 .copy-legend code{flex:none;min-width:3.2em;padding:.18em .35em;border-radius:3px;text-align:center;font:600 1rem monospace}
 .copy-legend strong{display:block}
+.band-speeds{display:flex;flex-wrap:wrap;gap:.35rem .9rem;margin:.5rem 0;color:#ceded8;font:12px/1.5 monospace}
+.band-speeds b{color:#a8ffd0}
