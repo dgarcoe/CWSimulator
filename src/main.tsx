@@ -410,13 +410,11 @@ function App(){
    </div></div>}
    {page==='radio'&&<div className="content-grid radio-console">
     <section className="panel"><div className="panel-kicker">CW · 40 m</div><h2>Transceptor CW</h2><div className="tuning-head"><div className="frequency"><span>VFO A · CW</span><strong>{dial.toLocaleString("de-DE")} <small>Hz</small></strong><span>{keys.dit||keys.dah?'TX':(bandState??(rxPlaying?'RX':'VFO A'))} · {tone} Hz · {wpm} WPM</span></div><RadioKnob large label="Sintonía VFO" value={dial} min={7024000} max={7026500} step={10} readout={dial.toLocaleString("de-DE")+" Hz"} change={setDial}/></div>
-     <Band setLever={setLever} paddleFeed={paddleFeed} onState={setBandState} wpm={wpm} hz={dial} tune={setDial} setCall={setMyCall} call={myCall} tone={tone} volume={volume} qrn={qrn} qsb={qsb} decoded={decoded}/>
+     <Band setLever={setLever} paddleFeed={paddleFeed} onState={setBandState} wpm={wpm} hz={dial} tune={setDial} setCall={setMyCall} call={myCall} tone={tone} volume={volume} qrn={qrn} setQrn={setQrn} qsb={qsb} setQsb={setQsb} decoded={decoded}/>
      <div className="radio-controls">
       <RadioKnob label="Velocidad" value={wpm} min={10} max={40} step={1} readout={wpm+' WPM'} change={setWpm}/>
       <RadioKnob label="Tono" value={tone} min={400} max={900} step={25} readout={tone+' Hz'} change={setTone}/>
       <RadioKnob label="Volumen" value={Math.round(volume*100)} min={0} max={60} step={1} readout={Math.round(volume*100)+'%'} change={n=>setVolume(n/100)}/>
-      <RadioKnob label="Ruido QRN" value={qrn} min={0} max={100} step={1} readout={qrn+'%'} change={setQrn}/>
-      <RadioKnob label="Desvanecimiento QSB" value={qsb} min={0} max={100} step={1} readout={qsb+'%'} change={setQsb}/>
       <fieldset className="radio-keys"><legend>Modo iámbico</legend>{(['A','B'] as const).map(m=><button key={m} aria-pressed={m===mode} onClick={()=>setMode(m)}>{m}</button>)}</fieldset>
      </div><button onClick={()=>void initAudio()}>Activar audio</button>
     </section>

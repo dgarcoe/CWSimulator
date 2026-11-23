@@ -278,3 +278,8 @@ footer{margin-top:20px;padding:13px 0}
 .scope-markers{height:52px;position:relative;background:#0a1626;border-bottom:1px solid #294054;pointer-events:none}
 .scope-markers span{position:absolute;z-index:2;transform:translateX(-50%);padding:1px 4px;border-radius:3px;background:#173446;color:#b1f2ef;font:10px/13px monospace;white-space:nowrap}
 .scope-option{width:fit-content}
+.scope-controls{display:flex;align-items:center;flex-wrap:wrap;gap:12px 22px;padding:12px 0;border-bottom:1px solid #445564}
+.scope-controls .radio-knob{flex:0 1 auto}
+.channel-options{margin:.75rem 0}
+.channel-options summary{cursor:pointer;width:fit-content}
+@media(max-width:560px){.scope-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px}.scope-controls .radio-keys{grid-column:1/-1;margin:0}}

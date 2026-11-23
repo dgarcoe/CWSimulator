@@ -1,3 +1,4 @@
+import {RadioKnob} from './RadioKnob';
 import {spectrumDisplay} from './scope';
 import {useEffect,useRef,useState} from 'react';
 import {CW_CODES} from './cwPlayback';
@@ -64,7 +65,7 @@ type Turn={phase:string;next:number;winner:number;offer?:{call:string;offset:num
 function copyLevel(power:number,offset:number,path:number,time:number,qsb:number,qrn:number){
  return power*multipath(time,path,qsb)/(1+(offset/65)**2)/(.12+qrn/180);
 }
-type Props={setLever:(lever:'dit'|'dah',down:boolean)=>void;paddleFeed:{current:((event:boolean|string)=>void)|null};onState:(state:'RX'|'TX'|null)=>void;wpm:number;hz:number;tune:(n:number)=>void;tone:number;volume:number;qrn:number;qsb:number;call:string;setCall:(call:string)=>void;decoded:string};
+type Props={setQrn:(n:number)=>void;setQsb:(n:number)=>void;setLever:(lever:'dit'|'dah',down:boolean)=>void;paddleFeed:{current:((event:boolean|string)=>void)|null};onState:(state:'RX'|'TX'|null)=>void;wpm:number;hz:number;tune:(n:number)=>void;tone:number;volume:number;qrn:number;qsb:number;call:string;setCall:(call:string)=>void;decoded:string};
 export function Band(props:Props){
  const {hz,tune,call}=props;
  const [on,setOn]=useState(false),[width,setWidth]=useState(500),[tx,setTx]=useState(''),[feedback,setFeedback]=useState(''),[contact,setContact]=useState<number|null>(null);
@@ -174,8 +175,9 @@ export function Band(props:Props){
    }
    const strike=p.storm&&Math.random()<.025;
    stormEnvelope=p.storm?(strike?1:stormEnvelope*.65):0;
-   noiseGain.gain.setTargetAtTime((keyed?0:p.volume)*(p.qrn/40+stormEnvelope*4),t,.008);
-   scope.begin(p.qrn,stormEnvelope);
+   const channelNoise=p.qrn/40+stormEnvelope*4;
+   noiseGain.gain.setTargetAtTime((keyed?0:p.volume)*channelNoise,t,.008);
+   scope.begin(channelNoise);
    stations.forEach((s,i)=>{
     const turn=traffic[i],dx=voices[i];
     if(!s.split||t<turn.next)return;
@@ -334,18 +336,21 @@ export function Band(props:Props){
  }
  return <section className="band"><div className="row"><h3>Banda de 40 m</h3><button onClick={()=>{setSpots([]);setOn(!on);setSending(false);setSplit(false);setMonitor(false);setContact(null);setFeedback('');setTx('');baseline.current=props.decoded}}>{on?'Cerrar banda':'Abrir banda'}</button></div>
  <p>Pulsa sobre un trazo para sintonizar. Afina con las flechas del VFO y escucha el indicativo antes de llamar.</p>
- <label>Hora UTC simulada · {hour}:00<input type="range" min="0" max="23" value={hour} onChange={e=>setHour(+e.target.value)}/></label>
- <small>Receptor en Madrid · escenario de equinoccio. Cambia la hora para comparar los mismos trayectos.</small>
- <label><input type="checkbox" checked={storm} onChange={e=>setStorm(e.target.checked)}/> Tormenta · QRN impulsivo</label>
  <label className="scope-option"><input type="checkbox" checked={showSpeeds} onChange={e=>setShowSpeeds(e.target.checked)}/> Mostrar marcadores WPM</label>
  <div className="band-scope" onPointerDown={e=>{const r=e.currentTarget.getBoundingClientRect();tune(Math.max(low,Math.min(high,Math.round(low+(e.clientX-r.left)/r.width*(high-low)))))}}>
  {on&&showSpeeds&&<div className="scope-markers" aria-label="Velocidades de las estaciones">{spots.map((s,i)=><span key={s.hz+'-'+s.wpm} style={{left:'clamp(25px, '+((s.hz-low)/(high-low)*100)+'%, calc(100% - 25px))',top:2+(i%3)*16}}>{s.wpm} WPM</span>)}</div>}
  <canvas key={on?'live':'idle'} ref={canvas} width="900" height="246" aria-label="Espectro y waterfall de la banda simulada"/><i style={{left:((split&&monitor?txHz:hz)-low)/(high-low)*100+'%',width:width/(high-low)*100+'%'}}/>{split&&txHz>=low&&txHz<=high&&<b className="tx-marker" style={{left:(txHz-low)/(high-low)*100+'%'}}>TX</b>}</div>
  <div className="band-scale"><span>7.024,0 kHz</span><span>7.026,5 kHz</span></div>
+ <div className="scope-controls"><RadioKnob label="Ruido QRN" value={props.qrn} min={0} max={100} step={1} readout={props.qrn+'%'} change={props.setQrn}/><RadioKnob label="Desvanecimiento QSB" value={props.qsb} min={0} max={100} step={1} readout={props.qsb+'%'} change={props.setQsb}/> <fieldset className="radio-keys"><legend>Filtro CW</legend>{[100,250,500,1000].map(n=><button key={n} aria-pressed={width===n} onClick={()=>setWidth(n)}>{n} Hz</button>)}</fieldset></div>
+ <details className="channel-options"><summary>Condiciones de propagación</summary>
+ <label>Hora UTC simulada · {hour}:00<input type="range" min="0" max="23" value={hour} onChange={e=>setHour(+e.target.value)}/></label>
+ <small>Receptor en Madrid · escenario de equinoccio. Cambia la hora para comparar los mismos trayectos.</small>
+ <label><input type="checkbox" checked={storm} onChange={e=>setStorm(e.target.checked)}/> Tormenta · QRN impulsivo</label>
+ </details>
  <label><input type="checkbox" checked={split} onChange={e=>setSplit(e.target.checked)}/> Split · TX independiente</label>
  {split&&<label>Desplazamiento TX +{offset} Hz · {txHz.toLocaleString('de-DE')} Hz<input type="range" min={0} max={1500} step={10} value={offset} onChange={e=>setOffset(+e.target.value)}/></label>}
  {split&&<label><input type="checkbox" checked={monitor} onChange={e=>setMonitor(e.target.checked)}/> Escuchar en la frecuencia TX</label>}
- <fieldset className="radio-keys"><legend>Filtro CW</legend>{[100,250,500,1000].map(n=><button key={n} aria-pressed={width===n} onClick={()=>setWidth(n)}>{n} Hz</button>)}</fieldset>
+
  {on&&<div className="band-paddles"><label><input type="checkbox" checked={direct} disabled={sending} onChange={e=>setDirect(e.target.checked)}/> Transmisión directa con paletas</label>{direct&&<><p>Manipula con tus teclas asignadas o con estas levas. Una pausa larga da el cambio automáticamente.</p><div className="row">{(['dit','dah'] as const).map(lever=><button key={lever} type="button" style={{touchAction:'none'}} onPointerDown={e=>{e.currentTarget.setPointerCapture(e.pointerId);props.setLever(lever,true)}} onLostPointerCapture={()=>props.setLever(lever,false)}>{lever.toUpperCase()}</button>)}</div></>}</div>}
  {on&&<form onSubmit={e=>{e.preventDefault();transmit()}}><label>Indicativo de operador<input className="textinput" maxLength={12} value={call} onChange={e=>props.setCall(e.target.value.toUpperCase())}/></label><label>Llamada en frecuencia<input className="textinput" value={tx} onChange={e=>setTx(e.target.value.toUpperCase())} placeholder="Indicativo DE tu indicativo K"/></label><div className="row"><button disabled={sending||!tx.trim()}>Transmitir</button><button type="button" disabled={sending} onClick={()=>transmit('QRL?')}>QRL?</button><button type="button" disabled={sending} onClick={()=>transmit('CQ CQ DE '+call.trim().toUpperCase()+' K')}>Llamar CQ</button><button type="button" onClick={()=>setTx(props.decoded.startsWith(baseline.current)?props.decoded.slice(baseline.current.length).trim():props.decoded)}>Capturar paletas</button></div></form>}
  {contact!==null&&<label>Copia del intercambio (RST, nombre y QTH)<input className="textinput" value={copy} onChange={e=>setCopy(e.target.value)} placeholder="Puedes pedir RST AGN?, NAME? o QTH?"/></label>}
