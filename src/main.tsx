@@ -72,6 +72,7 @@ function App(){
  const [page,setPage]=useState<'academy'|'radio'|'hardware'>('academy');
  const [wpm,setWpm]=useState(20),[tone,setTone]=useState(700),[volume,setVolume]=useState(.2),[mode,setMode]=useState<'A'|'B'>('B');
  const [status,setStatus]=useState('Sin conectar'),[events,setEvents]=useState<string[]>([]),[decoded,setDecoded]=useState(''),[keys,setKeys]=useState<Record<Lever,boolean>>({dit:false,dah:false});
+ const [countdown,setCountdown]=useState(0);
  const timedAnswerRef=useRef<HTMLTextAreaElement>(null);
  const [marks,setMarks]=useState<CopyMark[]>([]);
  const kochAnswerRef=useRef<HTMLInputElement|null>(null);
@@ -144,11 +145,25 @@ function App(){
   guidedTiming.current=session;
   setTarget(session.text);setAnswer('');setTrainingResult('');setExerciseChecked(false);
   setSessionRemaining(0);window.requestAnimationFrame(()=>timedAnswerRef.current?.focus());
-  void initAudio().then(()=>{
+  const ready=initAudio();
+  setCountdown(3);setRxPlaying(true);
+  const deadline=performance.now()+3000;
+  function tick(){
    if(stationPlaybackRequest.current!==request)return;
+   const remaining=deadline-performance.now();
+   if(remaining>0){
+    const seconds=Math.ceil(remaining/1000);
+    setCountdown(seconds);
+    rxTimeout.current=window.setTimeout(tick,remaining-(seconds-1)*1000);
+    return;
+   }
+   setCountdown(0);
    const playback=playCw(audio.current!,session.text,trainingWpm,trainingTone,volumeRef.current,effectiveWpm,undefined,session.extraGap,session.tail,session.stretchLetters);
-   rxPlayback.current=playback;setRxPlaying(true);
+   rxPlayback.current=playback;
    rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(playback.duration+.15)*1000);
+  }
+  void ready.then(tick).catch(()=>{
+   if(stationPlaybackRequest.current===request){stopStation();setTarget('')}
   });
  }
  function startSession(){setSessionScores([]);setSessionRemaining(sessionSize);newExercise()}
@@ -246,7 +261,7 @@ function App(){
   if(qsoStage===1){setQsoStage(2);setQsoFeedback('Copia su reporte, nombre y QTH y envía tu reporte RST.');remoteQso(call+' DE '+qsoStation.call+' GM UR RST '+qsoStation.rst+' NAME '+qsoStation.name+' QTH '+qsoStation.qth+' HW CPY? '+call+' DE '+qsoStation.call+' KN')}
   else{setQsoStage(3);setQsoFeedback('QSO completado. Inicia otro contacto con una estación diferente.');remoteQso(call+' DE '+qsoStation.call+' TNX FER QSO 73 SK')}
  }
- function stopStation(){stationPlaybackRequest.current++;rxPlayback.current?.stop();rxPlayback.current=null;window.clearTimeout(rxTimeout.current);setRxPlaying(false)}
+ function stopStation(){setCountdown(0);stationPlaybackRequest.current++;rxPlayback.current?.stop();rxPlayback.current=null;window.clearTimeout(rxTimeout.current);setRxPlaying(false)}
  function next(){
   const active=down.current;
   const remembered=pending.current;
@@ -341,7 +356,7 @@ function App(){
       </div>
      </div>:<div className="exercise">
       <span className="eyebrow">{trainingMode==='receive'?((Boolean(target)&&timedSize>0)?'RECEPCIÓN / GRUPOS DE '+timedSize:'RECEPCIÓN / 5 CARACTERES'):'ENVÍO / 5 CARACTERES'}</span>
-      <div className="exercise-target">{!target?'LISTO':trainingMode==='receive'?'♫  ♫  ♫':target}</div>
+      <div className="exercise-target">{countdown>0?<span role="status">Empieza en {countdown}…</span>:!target?'LISTO':trainingMode==='receive'?'♫  ♫  ♫':target}</div>
       <p className="muted">{!target?'Prepara tus auriculares y empieza una sesión.':trainingMode==='receive'?'Escucha el grupo completo y escribe lo que has reconocido.':'Transmite el grupo con tus paletas; luego comprueba el resultado.'}</p>
       {(Boolean(target)&&timedSize>0)&&trainingMode==='receive'&&<textarea ref={timedAnswerRef} readOnly={exerciseChecked} maxLength={target.length*3+100} className="textinput answer" aria-label="Copia de la sesión" rows={4} value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} placeholder="Escribe aquí los grupos que escuches"/>}
       {target&&!(Boolean(target)&&timedSize>0)&&trainingMode==='receive'&&<input readOnly={exerciseChecked} ref={kochAnswerRef} className="textinput answer" aria-label="Respuesta escuchada" onKeyDown={e=>{if(e.key==="Enter"&&!e.repeat){e.preventDefault();if(exerciseChecked)newExercise();else checkExercise()}}} autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} maxLength={10} placeholder="Escribe lo que escuchas · Enter para comprobar / continuar"/>}
