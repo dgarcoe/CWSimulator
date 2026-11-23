@@ -1,3 +1,4 @@
+import {spectrumDisplay} from './scope';
 import {useEffect,useRef,useState} from 'react';
 import {CW_CODES} from './cwPlayback';
 
@@ -96,6 +97,7 @@ export function Band(props:Props){
   };
   return ()=>{props.paddleFeed.current=null};
  },[on,direct,hz,txHz,props.paddleFeed]);
+ const [showSpeeds,setShowSpeeds]=useState(false);
  const [spots,setSpots]=useState<{hz:number;wpm:number}[]>([]);
  const canvas=useRef<HTMLCanvasElement>(null), rig=useRef<{ctx:AudioContext;voices:Voice[];stations:Station[];traffic:Turn[];busy:Set<number>;firstCaller:number;ownTx:Voice;ownStation:Station;activeCallers:number[];occupied:(hz:number)=>boolean}|null>(null);
  const [hour,setHour]=useState(17),[storm,setStorm]=useState(false);
@@ -152,8 +154,7 @@ export function Band(props:Props){
   noise.connect(passband).connect(noiseGain).connect(ctx.destination);noise.start();
   rig.current={ctx,voices,stations,busy,traffic,firstCaller,ownTx,ownStation,activeCallers:[],occupied};
   void ctx.resume().catch(()=>{if(rig.current?.ctx===ctx){setFeedback('No se pudo activar el audio. Vuelve a abrir la banda.');setOn(false)}});
-  const screen=canvas.current!,g=screen.getContext('2d')!;
-  g.fillStyle='#071820';g.fillRect(0,0,screen.width,screen.height);
+  const scope=spectrumDisplay(canvas.current!);
   let lastSpotScan=-1,spotSignature='';
   let stormEnvelope=0;
   const timer=window.setInterval(()=>{
@@ -174,10 +175,7 @@ export function Band(props:Props){
    const strike=p.storm&&Math.random()<.025;
    stormEnvelope=p.storm?(strike?1:stormEnvelope*.65):0;
    noiseGain.gain.setTargetAtTime((keyed?0:p.volume)*(p.qrn/40+stormEnvelope*4),t,.008);
-   g.drawImage(screen,0,0,screen.width,screen.height-1,0,1,screen.width,screen.height-1);
-   g.fillStyle='#071820';g.fillRect(0,0,screen.width,1);
-   if(stormEnvelope>.05){g.fillStyle='rgba(170,211,200,'+stormEnvelope*.8+')';g.fillRect(0,0,screen.width,1)}
-   for(let n=0;n<25+p.qrn;n++){g.fillStyle='#20404a';g.fillRect(Math.random()*screen.width,0,1,1)}
+   scope.begin(p.qrn,stormEnvelope);
    stations.forEach((s,i)=>{
     const turn=traffic[i],dx=voices[i];
     if(!s.split||t<turn.next)return;
@@ -229,9 +227,10 @@ export function Band(props:Props){
     const response=1/Math.sqrt(1+Math.pow(2*offset/p.width,8));
     v.osc.frequency.setTargetAtTime(Math.max(30,p.tone+offset),t,.012);
     v.gain.gain.setTargetAtTime((keyed&&s!==ownStation?0:p.volume)*s.power*fade*response,t,.012);
-    g.fillStyle='rgba(114,255,194,'+(manualTrace?Number(m.down):v.signal.level(t))*s.power*fade+')';
-    g.fillRect((frequency-low)/(high-low)*screen.width-2,0,5,1);
+    const level=manualTrace?Number(m.down):v.signal.level(t);
+    scope.signal((frequency-low)/(high-low),level*s.power*fade);
    });
+   scope.draw();
   },25);
   return ()=>{clearInterval(timer);manual.current.active=false;manual.current.down=false;afterTx.current=null;partial.current=null;rig.current=null;signals.forEach(s=>s.voice.close());noise.stop();void ctx.close()};
  },[on]);
@@ -338,10 +337,11 @@ export function Band(props:Props){
  <label>Hora UTC simulada · {hour}:00<input type="range" min="0" max="23" value={hour} onChange={e=>setHour(+e.target.value)}/></label>
  <small>Receptor en Madrid · escenario de equinoccio. Cambia la hora para comparar los mismos trayectos.</small>
  <label><input type="checkbox" checked={storm} onChange={e=>setStorm(e.target.checked)}/> Tormenta · QRN impulsivo</label>
+ <label className="scope-option"><input type="checkbox" checked={showSpeeds} onChange={e=>setShowSpeeds(e.target.checked)}/> Mostrar marcadores WPM</label>
  <div className="band-scope" onPointerDown={e=>{const r=e.currentTarget.getBoundingClientRect();tune(Math.max(low,Math.min(high,Math.round(low+(e.clientX-r.left)/r.width*(high-low)))))}}>
- <canvas ref={canvas} width="900" height="144" aria-label="Waterfall de la banda simulada"/><i style={{left:((split&&monitor?txHz:hz)-low)/(high-low)*100+'%',width:width/(high-low)*100+'%'}}/>{split&&txHz>=low&&txHz<=high&&<b className="tx-marker" style={{left:(txHz-low)/(high-low)*100+'%'}}>TX</b>}</div>
+ {on&&showSpeeds&&<div className="scope-markers" aria-label="Velocidades de las estaciones">{spots.map((s,i)=><span key={s.hz+'-'+s.wpm} style={{left:'clamp(25px, '+((s.hz-low)/(high-low)*100)+'%, calc(100% - 25px))',top:2+(i%3)*16}}>{s.wpm} WPM</span>)}</div>}
+ <canvas key={on?'live':'idle'} ref={canvas} width="900" height="246" aria-label="Espectro y waterfall de la banda simulada"/><i style={{left:((split&&monitor?txHz:hz)-low)/(high-low)*100+'%',width:width/(high-low)*100+'%'}}/>{split&&txHz>=low&&txHz<=high&&<b className="tx-marker" style={{left:(txHz-low)/(high-low)*100+'%'}}>TX</b>}</div>
  <div className="band-scale"><span>7.024,0 kHz</span><span>7.026,5 kHz</span></div>
- {on&&<div className="band-speeds" aria-label="Velocidades de las estaciones">{spots.map(s=><span key={s.hz+'-'+s.wpm}><b>{s.wpm} WPM</b> · {(s.hz/1000).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})} kHz</span>)}</div>}
  <label><input type="checkbox" checked={split} onChange={e=>setSplit(e.target.checked)}/> Split · TX independiente</label>
  {split&&<label>Desplazamiento TX +{offset} Hz · {txHz.toLocaleString('de-DE')} Hz<input type="range" min={0} max={1500} step={10} value={offset} onChange={e=>setOffset(+e.target.value)}/></label>}
  {split&&<label><input type="checkbox" checked={monitor} onChange={e=>setMonitor(e.target.checked)}/> Escuchar en la frecuencia TX</label>}
