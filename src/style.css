@@ -287,3 +287,5 @@ footer{margin-top:20px;padding:13px 0}
 .scope-controls .radio-keys{margin:0;grid-column:auto}
 .scope-controls .radio-keys:first-of-type{grid-column:span 2}
 @media(max-width:560px){.scope-controls{grid-template-columns:repeat(3,minmax(0,1fr))}.scope-controls .radio-knob{grid-row:auto}.scope-controls .radio-keys:first-of-type{grid-row:3}}
+.koch-review-groups{display:flex;flex-wrap:wrap;gap:.75rem;margin:.75rem 0}
+.koch-review-groups>div{padding:.4rem;border:1px solid var(--line);border-radius:.35rem}

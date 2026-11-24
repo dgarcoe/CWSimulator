@@ -1,3 +1,4 @@
+import {KochReview} from './KochReview';
 import {alignCopy,type CopyMark} from './copyReview';
 import {RadioKnob} from './RadioKnob';
 import {Band} from './Band';
@@ -59,7 +60,7 @@ function App(){
   codes:[['QTH','QTH VIGO','Ubicación de la estación.'],['QRM','QRM','Interferencia de otras transmisiones.'],['QRN','QRN','Ruido atmosférico o estático.'],['QRS / QRQ','QRS PSE','Transmitir más despacio / más deprisa.'],['QRP','QRP','Operación con baja potencia.'],['QSB','QSB','Desvanecimiento de la señal.'],['QRZ?','QRZ?','¿Quién me llama?'],['QSL','QSL','Confirmación de recepción o contacto.'],['RST','RST 599','Legibilidad, intensidad y tono; 599 es un reporte habitual en CW.']],
   tips:[['Escucha antes de llamar','QRL?','Comprueba que la frecuencia esté libre antes de transmitir.'],['Pide repetir','AGN PSE','Solicita que repitan el mensaje.'],['Reduce velocidad','QRS PSE','Es preferible copiar bien a transmitir demasiado rápido.'],['Confirma datos','R R TU','Confirma lo recibido sin alargar innecesariamente el contacto.'],['Abreviaturas útiles','GM OM TNX FER QSO 73','Buenos días, colega, gracias por el contacto y despedida.']]
  };
- function playGuide(text:string){stopStation();const request=stationPlaybackRequest.current;void initAudio().then(()=>{if(request!==stationPlaybackRequest.current)return;rxPlayback.current=playCw(audio.current!,text,trainingWpm,trainingTone,volumeRef.current,Math.min(effectiveWpm,trainingWpm));setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
+ function playGuide(text:string,wpm=trainingWpm,pitch=trainingTone,effective=effectiveWpm,extraGap=0){stopStation();const request=stationPlaybackRequest.current;void initAudio().then(()=>{if(request!==stationPlaybackRequest.current)return;rxPlayback.current=playCw(audio.current!,text,wpm,pitch,volumeRef.current,effective,undefined,extraGap);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
  const [progressScope,setProgressScope]=useState<'all'|'lesson'>('lesson');
  const paddleFeed=useRef<((event:boolean|string)=>void)|null>(null);
  const [groupSize,setGroupSize]=useState(5);
@@ -75,9 +76,14 @@ function App(){
  const [countdown,setCountdown]=useState(0);
  const timedAnswerRef=useRef<HTMLTextAreaElement>(null);
  const [marks,setMarks]=useState<CopyMark[]>([]);
+ const [material,setMaterial]=useState('groups');
+ const [rhythmText,setRhythmText]=useState('');
+ const rhythmArmed=useRef(false);
+ const rhythm=useRef({lastEnd:0,previous:'',gaps:[] as {after:string;units:number}[]});
+ const original=useRef({wpm:20,effective:8,tone:600,lesson:2});
  const kochAnswerRef=useRef<HTMLInputElement|null>(null);
  const [lesson,setLesson]=useState(savedKochCount),[trainingMode,setTrainingMode]=useState<'receive'|'send'|'machine'>('receive'),[trainingWpm,setTrainingWpm]=useState(20),[effectiveWpm,setEffectiveWpm]=useState(8),[target,setTarget]=useState(''),[answer,setAnswer]=useState(''),[trainingResult,setTrainingResult]=useState(''),[correct,setCorrect]=useState(0),[attempts,setAttempts]=useState(0);
- const [history,setHistory]=useState<{mode:string;lesson:number;lcwo?:boolean;errors?:string[];score:number;target?:string;actual?:string;date?:string}[]>(()=>{try{return JSON.parse(localStorage.getItem('cw-academy-history')||'[]')}catch{return []}});
+ const [history,setHistory]=useState<{mode:string;lesson:number;lcwo?:boolean;wpm?:number;effective?:number;errors?:string[];score:number;target?:string;actual?:string;date?:string}[]>(()=>{try{return JSON.parse(localStorage.getItem('cw-academy-history')||'[]')}catch{return []}});
  const [autoAdvance,setAutoAdvance]=useState(true);
  const [exerciseChecked,setExerciseChecked]=useState(false);
  useEffect(()=>{localStorage.setItem('cw-lcwo-count',String(lesson))},[lesson]);
@@ -104,22 +110,30 @@ function App(){
  const audio=useRef<AudioContext|null>(null),osc=useRef<OscillatorNode|null>(null),gain=useRef<GainNode|null>(null);
  const down=useRef<Record<Lever,boolean>>({dit:false,dah:false}),last=useRef<Lever>('dah'),timer=useRef<number|undefined>(undefined),running=useRef(false),sounding=useRef(false),pending=useRef<Record<Lever,boolean>>({dit:false,dah:false}),squeezed=useRef(false),extra=useRef<Lever|null>(null),sequence=useRef(''),letterTimer=useRef<number|undefined>(undefined),wordTimer=useRef<number|undefined>(undefined),wpmRef=useRef(wpm),modeRef=useRef(mode),volumeRef=useRef(volume),toneRef=useRef(tone);
  useEffect(()=>{wpmRef.current=wpm;modeRef.current=mode;volumeRef.current=volume;toneRef.current=tone;gain.current?.gain.setTargetAtTime(sounding.current?volume:0,audio.current!.currentTime,.01);osc.current?.frequency.setTargetAtTime(tone,audio.current!.currentTime,.01)},[wpm,mode,volume,tone]);
+ rhythmArmed.current=page==='academy'&&trainingMode==='send'&&Boolean(target)&&!exerciseChecked;
  function log(s:string){setEvents(p=>[new Date().toLocaleTimeString()+' '+s,...p].slice(0,40))}
  async function initAudio(){if(!audio.current){const ctx=new AudioContext();const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=toneRef.current;g.gain.value=0;o.connect(g).connect(ctx.destination);o.start();audio.current=ctx;osc.current=o;gain.current=g}await audio.current.resume()}
  function sidetone(on:boolean){paddleFeed.current?.(on);sounding.current=on;const c=audio.current,g=gain.current;if(c&&g)g.gain.setTargetAtTime(on?volumeRef.current:0,c.currentTime,.003)}
- function flushLetter(){if(!sequence.current)return;const pattern=sequence.current;const char=MORSE[pattern]||'?';paddleFeed.current?.(char);setRawSymbols(pattern);setDecoded(p=>p+char);sequence.current=''}
+ function flushLetter(){if(!sequence.current)return;const pattern=sequence.current;const char=MORSE[pattern]||'?';rhythm.current.previous=char;paddleFeed.current?.(char);setRawSymbols(pattern);setDecoded(p=>p+char);sequence.current=''}
  function newExercise(){
   setTimedSize(0);
   guidedTiming.current={extraGap:0,tail:0,stretchLetters:false};
   stopStation();
   if(trainingMode==='receive')window.requestAnimationFrame(()=>kochAnswerRef.current?.focus());
   const pool=KOCH.slice(0,lesson);
-  const sample=Array.from({length:5},()=>{const weights=pool.split('').map(ch=>1+Math.min(6,weaknesses[ch]||0));const total=weights.reduce((a,b)=>a+b,0);let draw=Math.random()*total;return pool.split('').find((ch,i)=>(draw-=weights[i])<0)||pool[pool.length-1]}).join('');
+  original.current={wpm:trainingWpm,effective:Math.min(trainingWpm,effectiveWpm),tone:trainingTone,lesson};
+  rhythm.current={lastEnd:0,previous:'',gaps:[]};setRhythmText('');
+  const vocabulary='KM M ME ES EN UN SI TU SU MAR SUR SOL DOS RADIO MORSE ANTENA ONDA AIRE ECO RUTA NUBE LUNA CQ DE K KN RST QTH QRS QRZ TNX PSE AGN NAME TEST'.split(' ').filter(w=>w.length>1&&Array.from(w).every(c=>pool.includes(c)));
+  const digits=Array.from(pool).filter(c=>/[0-9]/.test(c)),letters=Array.from(pool).filter(c=>/[A-Z]/.test(c));
+  const pick=(items:string[])=>items[Math.floor(Math.random()*items.length)];
+  const practiceCall=digits.length?pick(letters)+pick(letters)+pick(digits)+pick(letters)+pick(letters):'';
+  if(practiceCall)vocabulary.push(practiceCall);
+  const sample=material==='calls'&&practiceCall?practiceCall:material!=='groups'?pick(vocabulary):Array.from({length:5},()=>{const weights=pool.split('').map(ch=>1+Math.min(6,weaknesses[ch]||0));const total=weights.reduce((a,b)=>a+b,0);let draw=Math.random()*total;return pool.split('').find((ch,i)=>(draw-=weights[i])<0)||pool[pool.length-1]}).join('');
   setTarget(sample);setAnswer('');setTrainingResult('');setExerciseChecked(false);
   if(trainingMode==='send'){sequence.current='';setDecoded('');window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current)}
   else void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,sample,trainingWpm,trainingTone,volumeRef.current,effectiveWpm);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)});
  }
- function replayExercise(){if(!target)return;stopStation();void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,target,trainingWpm,trainingTone,volumeRef.current,effectiveWpm,undefined,guidedTiming.current.extraGap,guidedTiming.current.tail,guidedTiming.current.stretchLetters);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
+ function replayExercise(){if(!target)return;stopStation();void initAudio().then(()=>{rxPlayback.current=playCw(audio.current!,target,original.current.wpm,original.current.tone,volumeRef.current,original.current.effective,undefined,guidedTiming.current.extraGap,guidedTiming.current.tail,guidedTiming.current.stretchLetters);setRxPlaying(true);rxTimeout.current=window.setTimeout(()=>setRxPlaying(false),(rxPlayback.current!.duration+.15)*1000)})}
  function checkExercise(){
   if(!target||exerciseChecked||((Boolean(target)&&timedSize>0)&&rxPlaying))return;
   const actual=(trainingMode==='receive'?answer:decoded).replace(/\s/g,'').toUpperCase();
@@ -129,17 +143,24 @@ function App(){
   const count=review.filter(mark=>mark.kind==='hit').length;
   const score=Math.round(100*count/review.length);
   setAttempts(p=>p+1);if(score===100)setCorrect(p=>p+1);setExerciseChecked(true);
-  const updated=[...history,{mode:trainingMode,lesson,lcwo:true,errors:review.filter(m=>m.kind!=='hit').map(m=>(m.expected||'∅')+' → '+(m.actual||'∅')),score,target:expected,actual,date:new Date().toISOString()}].slice(-100);
+  const updated=[...history,{mode:trainingMode,lesson:original.current.lesson,lcwo:true,wpm:original.current.wpm,effective:original.current.effective,errors:review.filter(m=>m.kind!=='hit').map(m=>(m.expected||'∅')+' → '+(m.actual||'∅')),score,target:expected,actual,date:new Date().toISOString()}].slice(-100);
   setHistory(updated);
   if(sessionRemaining>0){setSessionScores(p=>[...p,score]);setSessionRemaining(p=>p-1)}
   setWeaknesses(prev=>{const next={...prev};for(const mark of review){const ch=mark.expected;if(!ch)continue;next[ch]=Math.max(0,(next[ch]||0)+(mark.kind==='hit'?-0.25:1))}return next});
-  const recent=updated.filter(h=>h.lcwo&&h.lesson===lesson&&h.mode===trainingMode).slice(-10);
-  if(autoAdvance&&recent.length===10&&recent.reduce((a,h)=>a+h.score,0)/10>=90&&lesson<KOCH.length){setLesson(p=>p+1);setTrainingResult('Lección superada. Nuevo carácter desbloqueado. '+score+'%');return}
+  if(trainingMode==='send'){
+   const gaps=rhythm.current.gaps, longest=gaps.reduce<typeof gaps[number]|undefined>((a,b)=>!a||b.units>a.units?b:a,undefined);
+   setRhythmText(!longest?'Transmite al menos dos caracteres para medir la separación.':
+    longest.units>=6.8?'Tras '+longest.after+' dejaste '+longest.units.toFixed(1)+' puntos de pausa. Entre letras, busca unos 3; con 7 se oye una palabra nueva.':
+    'Pausa media entre letras: '+(gaps.reduce((sum,g)=>sum+g.units,0)/gaps.length).toFixed(1)+' puntos. Referencia: 3 puntos.');
+  }
+  const recent=updated.filter(h=>h.lcwo&&h.lesson===original.current.lesson&&h.mode===trainingMode).slice(-10);
+  if(autoAdvance&&lesson===original.current.lesson&&recent.length===10&&recent.reduce((a,h)=>a+h.score,0)/10>=90&&lesson<KOCH.length){setLesson(p=>p+1);setTrainingResult('Lección superada. Nuevo carácter desbloqueado. '+score+'%');return}
   setTrainingResult(score+'% de coincidencia');
  }
  function startTimedSession(){
   stopStation();
   const request=stationPlaybackRequest.current;
+  original.current={wpm:trainingWpm,effective:Math.min(trainingWpm,effectiveWpm),tone:trainingTone,lesson};
   const session=timedGroups(KOCH.slice(0,lesson),trainingWpm,effectiveWpm,sessionSeconds,groupSize,addedPause);
   setTimedSize(groupSize);
   guidedTiming.current=session;
@@ -211,6 +232,8 @@ function App(){
  const machineByChar=KOCH.slice(0,lesson).split('').map(ch=>{const entries=machineLog.filter(x=>x.expected===ch);return {ch,total:entries.length,accuracy:entries.length?Math.round(100*entries.filter(x=>x.correct).length/entries.length):0,avg:entries.filter(x=>x.correct).length?Math.round(entries.filter(x=>x.correct).reduce((sum,x)=>sum+x.ms,0)/entries.filter(x=>x.correct).length):0}}).filter(x=>x.total).sort((a,b)=>a.accuracy-b.accuracy||b.avg-a.avg);
  const confusions:Record<string,number>={};
  for(const h of history){if(h.errors){for(const key of h.errors)confusions[key]=(confusions[key]||0)+1;continue}if(!h.target||h.actual===undefined)continue;for(let i=0;i<h.target.length;i++){const expected: string = h.target.charAt(i);const got: string = h.actual.charAt(i) || '∅';if(expected!==got){const key=expected+' → '+got;confusions[key]=(confusions[key]||0)+1}}}
+ const speedRun=history.filter(h=>h.mode==='receive'&&h.lesson===original.current.lesson&&h.wpm===original.current.wpm&&h.effective===original.current.effective).slice(-3);
+ const canReduceSpacing=trainingWpm===original.current.wpm&&effectiveWpm===original.current.effective&&effectiveWpm<trainingWpm&&speedRun.length===3&&speedRun.every(h=>h.score>=90);
  const topConfusions=Object.entries(confusions).sort((a,b)=>b[1]-a[1]).slice(0,8);
  function scheduleSpacing(dot:number){
   window.clearTimeout(letterTimer.current);window.clearTimeout(wordTimer.current);
@@ -278,10 +301,14 @@ function App(){
   last.current=lever;
   const dot=1200/wpmRef.current;
   const duration=lever==='dit'?dot:dot*3;
+  if(!sequence.current&&rhythm.current.lastEnd&&rhythm.current.previous&&rhythmArmed.current){
+   rhythm.current.gaps.push({after:rhythm.current.previous,units:(performance.now()-rhythm.current.lastEnd)/dot});
+  }
   sidetone(true);
   sequence.current+=lever==='dit'?'.':'-';
   timer.current=window.setTimeout(()=>{
    sidetone(false);
+   rhythm.current.lastEnd=performance.now();
    scheduleSpacing(dot);
    timer.current=window.setTimeout(next,dot);
   },duration);
@@ -355,14 +382,17 @@ function App(){
        <div className="machine-plot"><div className="machine-section-label">PRECISIÓN POR CARÁCTER <span>{machineByChar.length} ACTIVOS CON DATOS</span></div>{machineByChar.length?<div className="machine-bars">{machineByChar.map(x=><div key={x.ch} className="machine-bar"><b>{x.ch}</b><div className="machine-track"><i style={{width:x.accuracy+'%'}}/></div><span>{x.accuracy}%</span><small>{x.total} int. · {x.avg?(x.avg/1000).toFixed(1)+' s':'—'}</small></div>)}</div>:<p className="fineprint">Los datos aparecerán después de tus primeras respuestas.</p>}</div>
       </div>
      </div>:<div className="exercise">
-      <span className="eyebrow">{trainingMode==='receive'?((Boolean(target)&&timedSize>0)?'RECEPCIÓN / GRUPOS DE '+timedSize:'RECEPCIÓN / 5 CARACTERES'):'ENVÍO / 5 CARACTERES'}</span>
+      <label>Contenido del ejercicio libre<select value={material} onChange={e=>setMaterial(e.target.value)}><option value="groups">Grupos aleatorios</option><option value="words">Palabras, abreviaturas e indicativos</option><option value="calls" disabled={!/\d/.test(KOCH.slice(0,lesson))}>Solo indicativos · requiere un dígito</option></select></label>
+      <span className="eyebrow">{trainingMode==='receive'?((Boolean(target)&&timedSize>0)?'RECEPCIÓN / GRUPOS DE '+timedSize:'RECEPCIÓN'):'ENVÍO'}</span>
       <div className="exercise-target">{countdown>0?<span role="status">Empieza en {countdown}…</span>:!target?'LISTO':trainingMode==='receive'?'♫  ♫  ♫':target}</div>
       <p className="muted">{!target?'Prepara tus auriculares y empieza una sesión.':trainingMode==='receive'?'Escucha el grupo completo y escribe lo que has reconocido.':'Transmite el grupo con tus paletas; luego comprueba el resultado.'}</p>
       {(Boolean(target)&&timedSize>0)&&trainingMode==='receive'&&<textarea ref={timedAnswerRef} readOnly={exerciseChecked} maxLength={target.length*3+100} className="textinput answer" aria-label="Copia de la sesión" rows={4} value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} placeholder="Escribe aquí los grupos que escuches"/>}
       {target&&!(Boolean(target)&&timedSize>0)&&trainingMode==='receive'&&<input readOnly={exerciseChecked} ref={kochAnswerRef} className="textinput answer" aria-label="Respuesta escuchada" onKeyDown={e=>{if(e.key==="Enter"&&!e.repeat){e.preventDefault();if(exerciseChecked)newExercise();else checkExercise()}}} autoComplete="off" value={answer} onChange={e=>setAnswer(e.target.value.toUpperCase())} maxLength={10} placeholder="Escribe lo que escuchas · Enter para comprobar / continuar"/>}
       <div className="row"><button className="primary" onClick={newExercise}>{target?'Siguiente grupo':'Ejercicio libre'}</button>{target&&trainingMode==='receive'&&<button onClick={replayExercise}>Repetir sonido</button>}{target&&<button onClick={checkExercise} disabled={exerciseChecked||((Boolean(target)&&timedSize>0)&&rxPlaying)}>Comprobar</button>}</div>
       {trainingResult&&<div className="result"><p role="status">{trainingResult}</p>
-       <div className="copy-review">{marks.map((m,i)=><span key={i} className={'copy-'+m.kind}>{m.kind==='changed'?m.actual+'→'+m.expected:m.kind==='missing'?'+'+m.expected:m.kind==='extra'?'−'+m.actual:m.actual}</span>)}</div>
+       <KochReview text={target} marks={marks} pool={KOCH.slice(0,original.current.lesson)} play={word=>playGuide(word,original.current.wpm,original.current.tone,original.current.effective,guidedTiming.current.stretchLetters&&!target.includes(' ')?guidedTiming.current.extraGap:0)} next={newExercise}/>
+       {trainingMode==='send'&&<p>{rhythmText}</p>}
+       {trainingMode==='receive'&&canReduceSpacing&&<button onClick={()=>setEffectiveWpm(original.current.effective+1)}>Acortar pausas · probar {original.current.effective+1} WPM efectivos</button>}
        <ul className="copy-legend" aria-label="Cómo leer la corrección">
         <li><code className="copy-hit">K</code><span><strong>Acierto</strong>Se esperaba K y respondiste K.</span></li>
         <li><code className="copy-changed">M→K</code><span><strong>Sustitución</strong>Respondiste M. Se esperaba K.</span></li>
